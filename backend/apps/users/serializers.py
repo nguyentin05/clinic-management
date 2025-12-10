@@ -6,37 +6,35 @@ from .models import User, Role
 class GoogleAuthSerializer(serializers.Serializer):
     token =serializers.CharField(required=True)
 
-class ImageSerializer(serializers.ModelSerializer):
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'first_name', 'last_name', 'email', 'avatar',
+                  'phone_number', 'gender', 'address', 'date_of_birth']
+        read_only_fields = ['id', 'email']
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
 
-        data['image'] = instance.image.url
+        data['avatar'] = instance.avatar.url if instance.avatar else ''
 
         return data
 
-class UserSerializer(serializers.ModelSerializer):
-    avatar = serializers.ImageField(read_only=True)
-
-    class Meta:
-        model = User
-        fields = ['id', 'email', 'first_name', 'last_name', 'avatar']
-        read_only_fields = ['email', 'role', 'date_joined']
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
-    confirm_password = serializers.CharField(write_only=True, required=True)
-
     class Meta:
         model = User
-        fields = ['email', 'first_name', 'last_name', 'password', 'confirm_password', 'gender']
-
-    def validate(self, attrs):
-        if attrs['password'] != attrs['confirm_password']:
-            raise serializers.ValidationError({"password": "Mật khẩu xác nhận không khớp."})
-        return attrs
+        fields = ['first_name', 'last_name', 'email', 'password', 'avatar']
+        extra_kwargs = {
+            'password': {
+                'write_only': True
+            }
+        }
 
     def create(self, validated_data):
-        validated_data.pop('confirm_password')
-        validated_data['role'] = Role.PATIENT
-        user = User.objects.create_user(**validated_data)
+        user = User(**validated_data)
+        user.set_password(user.password)
+        user.role = Role.PATIENT
+        user.save()
+
         return user
