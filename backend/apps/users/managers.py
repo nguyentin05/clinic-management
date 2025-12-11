@@ -41,6 +41,8 @@ class UserManager(BaseUserManager):
     def create_superuser(self, email, password, first_name, last_name, **kwargs):
         kwargs.setdefault("is_staff", True)
         kwargs.setdefault("is_superuser", True)
+        from .models import Role
+        kwargs.setdefault("role", Role.ADMIN)
 
         if kwargs.get("is_staff") is not True:
             raise ValueError("Superuser must have is_staff=True.")
