@@ -12,7 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 
-from django.conf.global_settings import AUTH_USER_MODEL, MEDIA_URL, STATIC_ROOT
+from django.conf.global_settings import AUTH_USER_MODEL, MEDIA_URL, STATIC_ROOT, EMAIL_BACKEND, DEFAULT_FROM_EMAIL
 
 import environ
 from django.conf.global_settings import ABSOLUTE_URL_OVERRIDES
@@ -171,3 +171,14 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 GOOGLE_CLIENT_ID = env('GOOGLE_CLIENT_ID')
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+
+EMAIL_HOST = env('EMAIL_HOST')
+EMAIL_PORT = env('EMAIL_PORT')
+EMAIL_USE_TLS = env('EMAIL_USE_TLS')
+FRONTEND_URL = env('FRONTEND_URL')
+EMAIL_HOST_USER = env('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
