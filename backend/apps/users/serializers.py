@@ -1,68 +1,21 @@
-from django.conf import settings
-from django.contrib.auth.tokens import default_token_generator
-from django.utils.encoding import force_str
-from django.utils.http import urlsafe_base64_decode
-from google.oauth2 import id_token
-from rest_framework import serializers
-from rest_framework_simplejwt.settings import api_settings
-from rest_framework_simplejwt.tokens import RefreshToken
+import uuid
+from datetime import timedelta
 
-from .models import User, Role, PatientProfile, DoctorProfile, StaffProfile
+from django.conf import settings
+from django.core.cache import cache
+from django.utils import timezone
+from django.utils.crypto import get_random_string
+from google.oauth2 import id_token
+from oauth2_provider.models import Application, RefreshToken, AccessToken
+from oauth2_provider.settings import oauth2_settings
+from rest_framework import serializers
+
+from .models import User, PatientProfile, DoctorProfile, UserRole, EmployeeRole, NurseProfile, PharmacistProfile
 from google.auth.transport import requests as google_requests
 from cloudinary.uploader import upload
 
 
-class ProfileSerializer(serializers.ModelSerializer):
-    id = serializers.IntegerField(source='user.id', read_only=True)
-    email = serializers.EmailField(source='user.email', read_only=True)
-    first_name = serializers.CharField(source='user.first_name')
-    last_name = serializers.CharField(source='user.last_name')
-    phone_number = serializers.CharField(source='user.phone_number')
-    address = serializers.CharField(source='user.address')
-    gender = serializers.CharField(source='user.gender')
-    avatar = serializers.ImageField(source='user.avatar')
-    date_of_birth = serializers.DateField(source='user.date_of_birth')
-
-    def update(self, instance, validated_data):
-        user_data = validated_data.pop('user', {})
-
-        if user_data:
-            user = instance.user
-
-            for k, v in user_data.items():
-                setattr(user, k, v)
-
-            user.save()
-
-        return super().update(instance, validated_data)
-
-
-class PatientProfileSerializer(ProfileSerializer):
-    class Meta:
-        model = PatientProfile
-        fields = ['id', 'email', 'first_name', 'last_name', 'avatar',
-                  'phone_number', 'gender', 'address', 'weight', 'height',
-                  'blood_type', 'allergies', 'medical_history']
-        read_only_fields = ['email', 'id']
-
-
-class DoctorProfileSerializer(ProfileSerializer):
-    class Meta:
-        model = DoctorProfile
-        fields = ['id', 'email', 'first_name', 'last_name', 'avatar',
-                  'phone_number', 'gender', 'address', 'specialty', 'experience_years',
-                  'license_number', 'bio', 'consultation_fee']
-        read_only_fields = ['email', 'id']
-
-
-class StaffProfileSerializer(ProfileSerializer):
-    class Meta:
-        model = StaffProfile
-        fields = ['id', 'email', 'first_name', 'last_name', 'avatar',
-                  'phone_number', 'gender', 'address']
-        read_only_fields = ['email', 'id']
-
-
+# login gg
 class GoogleAuthSerializer(serializers.Serializer):
     token = serializers.CharField(required=True)
 
@@ -94,73 +47,180 @@ class GoogleAuthSerializer(serializers.Serializer):
         user = User.objects.filter(email=email).first()
 
         if user:
-            if user.role != Role.PATIENT:
+            if user.user_role != UserRole.PATIENT:
                 raise serializers.ValidationError({"error": "Tài khoản Nhân viên vui lòng đăng nhập bằng mật khẩu."})
         else:
             def upload_avatar(url):
                 try:
                     result = upload(url, folder='clinic-management/avatars', overwrite=True, resource_type="image")
 
-                    return result['secure_url']
+                    return result['public_id']
 
-                except Exception:
+                except Exception as ex:
+                    print(ex)
                     return None
 
             user = User.objects.create_user(
                 email=email,
                 first_name=first_name,
                 last_name=last_name,
-                role=Role.PATIENT,
+                user_role=UserRole.PATIENT,
                 password=None,
                 avatar=upload_avatar(avatar_url)
             )
+            user.set_unusable_password()
+            user.save()
 
-        refresh = RefreshToken.for_user(user)
+        app = Application.objects.first()
+
+        expires = timezone.now() + timedelta(seconds=oauth2_settings.ACCESS_TOKEN_EXPIRE_SECONDS)
+
+        access_token = AccessToken.objects.create(
+            user=user,
+            application=app,
+            token=get_random_string(30),
+            expires=expires,
+            scope="read write"
+        )
+
+        refresh_token = RefreshToken.objects.create(
+            user=user,
+            application=app,
+            token=get_random_string(30),
+            access_token=access_token,
+            token_family=str(uuid.uuid4())
+        )
 
         return {
-            'access_token': str(refresh.access_token),
-            'expires_in': int(api_settings.ACCESS_TOKEN_LIFETIME.total_seconds()),
+            'access_token': access_token.token,
+            'expires_in': oauth2_settings.ACCESS_TOKEN_EXPIRE_SECONDS,
             'token_type': 'Bearer',
-            "scope": "read write",
-            'refresh_token': str(refresh)
+            "scope": access_token.scope,
+            'refresh_token': refresh_token.token
         }
 
 
+class DoctorProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DoctorProfile
+        fields = '__all__'
+
+
+class PatientProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PatientProfile
+        fields = '__all__'
+
+
+class NurseProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NurseProfile
+        fields = '__all__'
+
+
+class PharmacistProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PharmacistProfile
+        fields = '__all__'
+
+
+# xem thong tin co ban
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'first_name', 'last_name', 'email', 'avatar',
-                  'phone_number', 'gender', 'address', 'date_of_birth']
-        read_only_fields = ['id', 'email']
+        fields = ['id', 'first_name', 'last_name', 'email', 'avatar', 'password',
+                  'phone', 'gender', 'address', 'date_of_birth', 'user_role', 'employee_id', 'hire_date',
+                  'employee_role']
+        read_only_fields = ['user_role', 'employee_id', 'hire_date', 'employee_role']
+        extra_kwargs = {
+            'password': {
+                'write_only': True
+            }
+        }
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
+
+        if instance.user_role != UserRole.EMPLOYEE:
+            for field in ['employee_id', 'employee_role', 'hire_date']:
+                data.pop(field, None)
 
         data['avatar'] = instance.avatar.url if instance.avatar else ''
 
         return data
 
-
-class UserRegistrationSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = ['first_name', 'last_name', 'email', 'password', 'avatar']
-
     def create(self, validated_data):
         user = User(**validated_data)
         user.set_password(user.password)
-        user.role = Role.PATIENT
+        user.user_role = UserRole.PATIENT
         user.save()
 
         return user
 
 
+# xem profile chi tiet
+class UserDetailSerializer(UserSerializer):
+    profile = serializers.SerializerMethodField()
+
+    def get_profile(self, instance):
+        if instance.user_role == UserRole.PATIENT:
+            return PatientProfileSerializer(instance.patient_profile).data
+
+        elif instance.user_role == UserRole.EMPLOYEE:
+            if instance.employee_role == EmployeeRole.DOCTOR:
+                return DoctorProfileSerializer(instance.doctor_profile).data
+            elif instance.employee_role == EmployeeRole.NURSE:
+                return NurseProfileSerializer(instance.nurse_profile).data
+            elif instance.employee_role == EmployeeRole.PHARMACIST:
+                return PharmacistProfileSerializer(instance.pharmacist_profile).data
+
+        return None
+
+    class Meta:
+        model = UserSerializer.Meta.model
+        fields = UserSerializer.Meta.fields + ['profile']
+
+
+# cap nhat thong tin co ban
+class UserUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['first_name', 'last_name', 'avatar', 'phone', 'gender', 'address', 'date_of_birth', 'email']
+        read_only_fields = ['email']
+
+
+# cap nhat profile chi tiet
+class PatientProfileUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PatientProfile
+        fields = [
+            'patient_code', 'emergency_contact', 'emergency_contact_name',
+            'blood_type', 'allergies', 'chronic_diseases', 'medical_history',
+            'insurance_number', 'insurance_provider', 'height', 'weight'
+        ]
+        read_only_fields = ['patient_code']
+
+
+class DoctorProfileUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DoctorProfile
+        fields = ['bio', 'experience_years', 'consultation_fee',  # Bác sĩ tự update được
+                  'specialty', 'license_number', 'degree',  # Admin update
+                  'is_available']
+        read_only_fields = ['specialty', 'license_number', 'degree', 'rating', 'total_reviews', 'total_patients']
+
+
+# doi mat khau
 class ChangePasswordSerializer(serializers.Serializer):
-    old_password = serializers.CharField(required=True)
-    new_password = serializers.CharField(required=True)
+    old_password = serializers.CharField(required=True, write_only=True)
+    new_password = serializers.CharField(required=True, write_only=True)
+
+    # tạm thời ko cần phức tạp
+    # new_password = serializers.CharField(required=True, validators=[validate_password])
+    # confirm ở front
 
     def validate_old_password(self, value):
-        user = self.context['request'].user
+        user = self.instance
         if not user.check_password(value):
             raise serializers.ValidationError("Mật khẩu cũ không chính xác.")
         return value
@@ -171,37 +231,57 @@ class ChangePasswordSerializer(serializers.Serializer):
         return instance
 
 
+# gui otp
 class ResetPasswordRequestSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
 
     def validate_email(self, value):
         if not User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("Email không tồn tại.")
+            raise serializers.ValidationError("Email không tồn tại")
         return value
 
 
-class ResetPasswordConfirmSerializer(serializers.Serializer):
-    new_password = serializers.CharField(required=True, write_only=True)
-    uid = serializers.CharField(required=True)
-    token = serializers.CharField(required=True)
+# xac nhan otp
+class VerifyOTPSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    otp = serializers.CharField(required=True)
 
     def validate(self, attrs):
-        try:
-            uid = force_str(urlsafe_base64_decode(attrs['uid']))
-            user = User.objects.get(pk=uid)
+        email = attrs['email']
+        otp = attrs['otp']
 
-        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
-            raise serializers.ValidationError({"token": "Link xác thực không hợp lệ."})
+        cached_otp = cache.get(f"password_reset_otp:{email}")
 
-        if not default_token_generator.check_token(user, attrs['token']):
-            raise serializers.ValidationError({"token": "Link xác thực không hợp lệ hoặc đã hết hạn."})
+        if cached_otp is None:
+            raise serializers.ValidationError({"otp": "OTP hết hạn hoặc không tồn tại."})
 
-        attrs['user'] = user
+        if cached_otp != otp:
+            raise serializers.ValidationError({"otp": "OTP không chính xác."})
 
         return attrs
 
+
+# reset mat khau
+class ResetPasswordSerializer(serializers.Serializer):
+    token = serializers.CharField(required=True)
+    new_password = serializers.CharField(required=True, write_only=True)
+
+    # tạm thời ko cần phức tạp
+    # new_password = serializers.CharField(required=True, write_only=True, validators=[validate_password])
+    # confirm ở front
+
+    def validate(self, attrs):
+        token = attrs.get('token')
+        email = cache.get(f"reset_token:{token}")
+
+        if not email:
+            raise serializers.ValidationError({"token": "Token hết hạn hoặc không hợp lệ."})
+
+        attrs['email'] = email
+        return attrs
+
     def save(self, **kwargs):
-        user = self.validated_data['user']
+        user = User.objects.get(email=self.validated_data['email'])
         user.set_password(self.validated_data['new_password'])
         user.save()
 

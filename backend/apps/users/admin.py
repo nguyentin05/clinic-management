@@ -4,9 +4,9 @@ from django.utils.safestring import mark_safe
 from .models import User
 
 class UserAdmin(admin.ModelAdmin):
-    list_display = ['id', 'email', 'first_name', 'last_name', 'is_active', 'is_staff', 'role']
+    list_display = ['id', 'email', 'first_name', 'last_name', 'is_active', 'is_staff', 'user_role']
     list_display_links = ['id', 'email']
-    list_filter = ['is_staff', 'is_active', 'role']
+    list_filter = ['is_staff', 'is_active', 'user_role']
     search_fields = ['email', 'first_name', 'last_name']
     readonly_fields = ['avatar_view']
 
