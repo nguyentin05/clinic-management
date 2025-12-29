@@ -132,14 +132,24 @@ class AppointmentView(viewsets.ViewSet, generics.ListAPIView, generics.CreateAPI
 
     def get_permissions(self):
         if self.action == "create":
-            return [IsPatient]
-        return [IsOwnerAppointment]
+            return [IsPatient()]
+        return [IsOwnerAppointment()]
 
     def get_serializer_class(self):
         if self.action == "create":
             return CreateAppointmentSerializer
         if self.action == "list":
             return AppointmentSerializer
+        if self.action == "confirm_appointment":
+            return ConfirmAppointmentSerializer
+        if self.action == "start_appointment":
+            return StartAppointmentSerializer
+        if self.action == "get_medical_record":
+            return MedicalRecordSerializer
+        if self.action == "get_test_orders":
+            return TestOrderSerializer
+        if self.action == "get_available_rooms":
+            return RoomSerializer
         return AppointmentDetailSerializer
 
     def get_queryset(self):
@@ -175,13 +185,13 @@ class AppointmentView(viewsets.ViewSet, generics.ListAPIView, generics.CreateAPI
 
         return Response(AppointmentDetailSerializer(appointment).data, status=status.HTTP_201_CREATED)
 
-    @swagger_auto_schema(operation_description='Xác nhận lịch hẹn', request_body=ConfirmAppointmentSerializer(),
+    @swagger_auto_schema(operation_description='Xác nhận lịch hẹn',
                          responses={status.HTTP_200_OK: AppointmentDetailSerializer()})
     @action(methods=['patch'], detail=True, url_path='confirm')
     def confirm_appointment(self, request, pk):
         appointment = self.get_object()
 
-        serializer = ConfirmAppointmentSerializer(appointment, data=request.data)
+        serializer = self.get_serializer(appointment, data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
@@ -207,7 +217,7 @@ class AppointmentView(viewsets.ViewSet, generics.ListAPIView, generics.CreateAPI
 
         available_rooms = Room.objects.filter(active=True).exclude(id__in=busy_room_ids)
 
-        return Response(RoomSerializer(available_rooms, many=True).data, status=status.HTTP_200_OK)
+        return Response(self.get_serializer(available_rooms, many=True).data, status=status.HTTP_200_OK)
 
     @swagger_auto_schema(operation_description='Xác nhận lịch hẹn', request_body=no_body,
                          responses={status.HTTP_200_OK: AppointmentDetailSerializer()})
@@ -215,7 +225,7 @@ class AppointmentView(viewsets.ViewSet, generics.ListAPIView, generics.CreateAPI
     def start_appointment(self, request, pk):
         appointment = self.get_object()
 
-        serializer = StartAppointmentSerializer(appointment, data=request.data)
+        serializer = self.get_serializer(appointment, data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
@@ -226,35 +236,35 @@ class AppointmentView(viewsets.ViewSet, generics.ListAPIView, generics.CreateAPI
         appointment = self.get_object()
 
         if appointment.status not in [AppointmentStatus.IN_PROCESS, AppointmentStatus.COMPLETED]:
-            return Response('Cuộc hẹn chưa được bắt đầu.', status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": 'Cuộc hẹn chưa được bắt đầu.'}, status=status.HTTP_400_BAD_REQUEST)
 
         # tìm hs bệnh án nếu ko thấy trả về 404 luôn
         medical_record = get_object_or_404(MedicalRecord, appointment=appointment)
 
         if request.method == 'patch':
-            serializer = MedicalRecordSerializer(medical_record, data=request.data, partial=True)
+            serializer = self.get_serializer(medical_record, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
             serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
 
-        return Response(MedicalRecordSerializer(medical_record).data, status=status.HTTP_200_OK)
+        return Response(self.get_serializer(medical_record).data, status=status.HTTP_200_OK)
 
     @action(methods=['get', 'post'], detail=True, url_path='test-orders')
     def get_test_orders(self, request, pk):
         appointment = self.get_object()
 
         if appointment.status not in [AppointmentStatus.IN_PROCESS, AppointmentStatus.COMPLETED]:
-            return Response('Cuộc hẹn chưa được bắt đầu.', status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": 'Cuộc hẹn chưa được bắt đầu.'}, status=status.HTTP_400_BAD_REQUEST)
 
         medical_record = get_object_or_404(MedicalRecord, appointment=appointment)
 
-        TestOrder.objects.filter(medical_record=medical_record)
-
         if request.method == 'post':
-            serializer = TestOrderSerializer(data=request.data)
+            serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
-            test_order = serializer.save(medical_record=medical_record)
-            return Response(TestOrderSerializer(test_order).data, status=status.HTTP_201_CREATED)
+            serializer.save(medical_record=medical_record)
+
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         test_orders = TestOrder.objects.filter(medical_record=medical_record)
 
-        return Response(TestOrderSerializer(test_orders, many=True).data, status=status.HTTP_200_OK)
+        return Response(self.get_serializer(test_orders, many=True).data, status=status.HTTP_200_OK)
