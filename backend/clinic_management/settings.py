@@ -53,7 +53,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'apps.billing',
+    'apps.payment',
     'apps.clinic',
     'apps.medical',
     'apps.pharmacy',
@@ -141,6 +141,19 @@ CACHES = {
     }
 }
 
+CELERY_BROKER_URL = 'redis://127.0.0.1:6379/1'
+CELERY_RESULT_BACKEND = 'redis://127.0.0.1:6379/1'
+CELERY_TIMEZONE = 'Asia/Ho_Chi_Minh'
+
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    'auto_clone_schedule': {
+        'task': 'apps.clinic.tasks.auto_clone_next_week_schedule',
+        'schedule': crontab(day_of_week=1, hour=0, minute=0)
+    },
+}
+
 # EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
@@ -179,7 +192,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Ho_Chi_Minh'
 USE_I18N = True
 USE_TZ = True
 CORS_ALLOW_ALL_ORIGINS = True
@@ -200,8 +213,5 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 GOOGLE_CLIENT_ID = env('GOOGLE_CLIENT_ID')
-
-
-
 
 CKEDITOR_UPLOAD_PATH = "images/lessons/"

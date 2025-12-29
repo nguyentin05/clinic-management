@@ -18,10 +18,12 @@ class EmployeeRole(models.TextChoices):
     NURSE = "Nurse", "Y tá"
     PHARMACIST = "Pharmacist", "Dược sĩ"
 
+
 class Gender(models.TextChoices):
     MALE = "Male", "Nam"
     FEMALE = "Female", "Nữ"
     OTHER = "Other", "Khác"
+
 
 class BloodType(models.TextChoices):
     A = 'A', 'A'
@@ -65,7 +67,6 @@ class User(AbstractUser):
             return f'{self.user_role} - {self.employee_role}'
         return f'{self.user_role}'
 
-
     def __str__(self):
         return f"{self.get_full_name()} ({self.get_full_role()})"
 
@@ -86,7 +87,7 @@ class PatientProfile(models.Model):
     def save(self, *args, **kwargs):
         if not self.patient_code:
             self.patient_code = f'BN{datetime.date.today().year}{self.pk:06d}'
-            
+
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -100,6 +101,7 @@ class EmployeeBaseProfile(models.Model):
 
     class Meta:
         abstract = True
+
 
 class DoctorProfile(EmployeeBaseProfile):
     user = models.OneToOneField(User, related_name='doctor_profile', on_delete=models.CASCADE, primary_key=True)
@@ -116,12 +118,14 @@ class DoctorProfile(EmployeeBaseProfile):
     def __str__(self):
         return f"BS. {self.user.get_full_name()} - {self.specialty}"
 
+
 class NurseProfile(EmployeeBaseProfile):
     user = models.OneToOneField(User, related_name='nurse_profile', on_delete=models.CASCADE, primary_key=True)
     nurse_license = models.CharField(max_length=50, unique=True, null=True, blank=True)
 
     def __str__(self):
         return f"YT. {self.user.get_full_name()}"
+
 
 class PharmacistProfile(EmployeeBaseProfile):
     user = models.OneToOneField(User, related_name='pharmacist_profile', on_delete=models.CASCADE, primary_key=True)
