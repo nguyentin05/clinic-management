@@ -44,7 +44,7 @@ class UserView(viewsets.ViewSet, generics.CreateAPIView):
     def change_password(self, request):
         user = request.user
 
-        serializer = ChangePasswordSerializer(user, data=request.data, context={'request': request})
+        serializer = ChangePasswordSerializer(user, data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
@@ -64,7 +64,7 @@ class GoogleLoginView(APIView):
         serializer = GoogleAuthSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         # lay du lieu token y chang oauth2 tra ve
-        return Response(serializer.validated_data, status=status.HTTP_200_OK)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class ResetPasswordRequestView(APIView):
@@ -84,7 +84,7 @@ class ResetPasswordRequestView(APIView):
         #
         # if attempts >= 3:
         #     return Response(
-        #         {"error": "Đã yêu cầu quá nhiều lần. Vui lòng thử lại sau 15 phút."},
+        #         {"error": "Đã yêu cầu quá nhiều lần"},
         #         status=status.HTTP_429_TOO_MANY_REQUESTS
         #     )
 
@@ -93,7 +93,6 @@ class ResetPasswordRequestView(APIView):
 
         otp = get_random_string(length=6, allowed_chars='0123456789')
 
-        # Send email
         user = User.objects.get(email=email)
 
         subject = "Ma Xac Thuc Dat Lai MK - Clinic Management"
@@ -119,7 +118,6 @@ class ResetPasswordRequestView(APIView):
                 fail_silently=False
             )
 
-            # Cache OTP for verification (optional, tăng security)
             otp_cache_key = f"password_reset_otp:{email}"
             cache.set(otp_cache_key, otp, timeout=settings.OTP_EXPIRY_MINUTES * 60)
 
@@ -160,8 +158,7 @@ class VerifyOTPView(APIView):
             {
                 "message": "Mã OTP hợp lệ",
                 "temp_token": temp_token
-            },
-            status=status.HTTP_200_OK
+            }, status=status.HTTP_200_OK
         )
 
 
@@ -176,7 +173,4 @@ class ResetPasswordView(APIView):
         token = serializer.validated_data['token']
         cache.delete(f"reset_token:{token}")
 
-        return Response(
-            {"message": "Đặt lại mật khẩu thành công."},
-            status=status.HTTP_200_OK
-        )
+        return Response({"message": "Đặt lại mật khẩu thành công."}, status=status.HTTP_200_OK)

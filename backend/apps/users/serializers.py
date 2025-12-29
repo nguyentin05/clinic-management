@@ -100,6 +100,49 @@ class GoogleAuthSerializer(serializers.Serializer):
         }
 
 
+# thong tin trong lich hen
+class DoctorProfilePublicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DoctorProfile
+        fields = ['specialty', 'bio', 'consultation_fee',
+                  'rating', 'total_reviews', 'total_patients', 'is_available']
+
+
+# thong tin trong lich hen
+class PatientProfilePublicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PatientProfile
+        fields = ['blood_type', 'allergies', 'chronic_diseases',
+                  'medical_history', 'height', 'weight']
+
+
+# thong tin trong lich hen
+class BasicInfoSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField(source="get_full_name")
+
+    class Meta:
+        model = User
+        fields = ['id', 'first_name', 'last_name', 'full_name', 'avatar']
+
+
+# thong tin trong lich hen
+class DoctorInfoSerializer(BasicInfoSerializer):
+    public_profile = DoctorProfilePublicSerializer()
+
+    class Meta:
+        model = BasicInfoSerializer.Meta.model
+        fields = BasicInfoSerializer.Meta.fields + ['public_profile']
+
+
+# thong tin trong lich hen
+class PatientInfoSerializer(BasicInfoSerializer):
+    public_profile = PatientProfilePublicSerializer()
+
+    class Meta:
+        model = BasicInfoSerializer.Meta.model
+        fields = BasicInfoSerializer.Meta.fields + ['public_profile']
+
+
 class DoctorProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = DoctorProfile
@@ -110,6 +153,7 @@ class PatientProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = PatientProfile
         fields = '__all__'
+        read_only_fields = ['patient_code']
 
 
 class NurseProfileSerializer(serializers.ModelSerializer):
@@ -187,27 +231,6 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         model = User
         fields = ['first_name', 'last_name', 'avatar', 'phone', 'gender', 'address', 'date_of_birth', 'email']
         read_only_fields = ['email']
-
-
-# cap nhat profile chi tiet
-class PatientProfileUpdateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = PatientProfile
-        fields = [
-            'patient_code', 'emergency_contact', 'emergency_contact_name',
-            'blood_type', 'allergies', 'chronic_diseases', 'medical_history',
-            'insurance_number', 'insurance_provider', 'height', 'weight'
-        ]
-        read_only_fields = ['patient_code']
-
-
-class DoctorProfileUpdateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = DoctorProfile
-        fields = ['bio', 'experience_years', 'consultation_fee',  # Bác sĩ tự update được
-                  'specialty', 'license_number', 'degree',  # Admin update
-                  'is_available']
-        read_only_fields = ['specialty', 'license_number', 'degree', 'rating', 'total_reviews', 'total_patients']
 
 
 # doi mat khau
