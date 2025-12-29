@@ -70,7 +70,6 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -121,33 +120,16 @@ WSGI_APPLICATION = 'clinic_management.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': env('MYSQL_ENGINE'),
-#         'NAME': env('MYSQL_DB'),
-#         'USER': env('MYSQL_USER'),
-#         'PASSWORD': env('MYSQL_PASSWORD'),
-#         'HOST': env('MYSQL_HOST'),
-#         'PORT': env('MYSQL_PORT'),
-#     }
-# }
-import dj_database_url
-
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': env('MYSQL_ENGINE'),
+        'NAME': env('MYSQL_DB'),
+        'USER': env('MYSQL_USER'),
+        'PASSWORD': env('MYSQL_PASSWORD'),
+        'HOST': env('MYSQL_HOST'),
+        'PORT': env('MYSQL_PORT'),
     }
 }
-
-database_url = env("DATABASE_URL")
-if database_url:
-    DATABASES['default'] = dj_database_url.parse(
-        database_url,
-        engine='django.db.backends.mysql',
-        conn_max_age=600,
-    )
-    DATABASES['default']['OPTIONS'] = {'init_command': "SET sql_mode='STRICT_TRANS_TABLES'"}
 
 CACHES = {
     'default': {
@@ -222,9 +204,6 @@ CSRF_TRUSTED_ORIGINS = env('CSRF_TRUSTED_URLS').split(' ')
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'static'
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-
-
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
