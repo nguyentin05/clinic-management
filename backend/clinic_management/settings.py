@@ -12,17 +12,15 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 
-from django.conf.global_settings import AUTH_USER_MODEL, MEDIA_URL, STATIC_ROOT, EMAIL_BACKEND, DEFAULT_FROM_EMAIL
+from django.conf.global_settings import AUTH_USER_MODEL, MEDIA_URL, STATIC_ROOT, EMAIL_BACKEND
 
 import environ
-from django.conf.global_settings import ABSOLUTE_URL_OVERRIDES
 
 env = environ.Env(DEBUG=(bool, False))
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 environ.Env.read_env(BASE_DIR / '.env')
-
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
@@ -38,6 +36,7 @@ ALLOWED_HOSTS = env('ALLOWED_HOSTS').split(' ')
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
+
 cloudinary.config(
     cloud_name=env('CLOUD_NAME'),
     api_key=env('API_KEY'),
@@ -116,7 +115,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'clinic_management.wsgi.application'
 
-
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
@@ -134,15 +132,15 @@ DATABASES = {
 CACHES = {
     'default': {
         'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': 'redis://127.0.0.1:6379/1',
+        'LOCATION': env('REDIS_URL'),
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
         }
     }
 }
 
-CELERY_BROKER_URL = 'redis://127.0.0.1:6379/1'
-CELERY_RESULT_BACKEND = 'redis://127.0.0.1:6379/1'
+CELERY_BROKER_URL = env('REDIS_URL')
+CELERY_RESULT_BACKEND = env('REDIS_URL')
 CELERY_TIMEZONE = 'Asia/Ho_Chi_Minh'
 
 from celery.schedules import crontab
@@ -167,7 +165,7 @@ EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
 OTP_EXPIRY_MINUTES = 10
 OTP_MAX_ATTEMPTS = 3
 
-AUTH_USER_MODEL='users.User'
+AUTH_USER_MODEL = 'users.User'
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
@@ -186,7 +184,6 @@ AUTH_PASSWORD_VALIDATORS = [
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
 ]
-
 
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
