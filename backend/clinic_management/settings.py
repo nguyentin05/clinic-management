@@ -12,15 +12,17 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 
-from django.conf.global_settings import AUTH_USER_MODEL, MEDIA_URL, STATIC_ROOT, EMAIL_BACKEND
+from django.conf.global_settings import AUTH_USER_MODEL, MEDIA_URL, STATIC_ROOT, EMAIL_BACKEND, DEFAULT_FROM_EMAIL
 
 import environ
+from django.conf.global_settings import ABSOLUTE_URL_OVERRIDES
 
 env = environ.Env(DEBUG=(bool, False))
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 environ.Env.read_env(BASE_DIR / '.env')
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
@@ -32,16 +34,6 @@ SECRET_KEY = env('SECRET_KEY')
 DEBUG = env('DEBUG')
 
 ALLOWED_HOSTS = env('ALLOWED_HOSTS').split(' ')
-
-import cloudinary
-import cloudinary.uploader
-import cloudinary.api
-
-cloudinary.config(
-    cloud_name=env('CLOUD_NAME'),
-    api_key=env('API_KEY'),
-    api_secret=env('API_SECRET')
-)
 
 # Application definition
 
@@ -115,6 +107,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'clinic_management.wsgi.application'
 
+
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
@@ -165,7 +158,7 @@ EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
 OTP_EXPIRY_MINUTES = 10
 OTP_MAX_ATTEMPTS = 3
 
-AUTH_USER_MODEL = 'users.User'
+AUTH_USER_MODEL='users.User'
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
@@ -184,6 +177,7 @@ AUTH_PASSWORD_VALIDATORS = [
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
 ]
+
 
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
@@ -206,6 +200,17 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
+
+
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
+cloudinary.config(
+    cloud_name=env('CLOUD_NAME'),
+    api_key=env('API_KEY'),
+    api_secret=env('API_SECRET')
+)
+
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
