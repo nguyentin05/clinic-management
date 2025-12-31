@@ -37,7 +37,25 @@ jobs:
     - name: Run Tests
       env:
         SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+        DEBUG: 'False'
+        ALLOWED_HOSTS: 'localhost 127.0.0.1'
+        MYSQL_ENGINE: 'django.db.backends.sqlite3'
+        MYSQL_DB: 'db.sqlite3'
+        MYSQL_USER: 'dummy_user'
+        MYSQL_PASSWORD: 'dummy_password'
+        MYSQL_HOST: 'localhost'
+        MYSQL_PORT: '3306'
         REDIS_URL: 'redis://localhost:6379/0'
+        CSRF_TRUSTED_URLS: 'http://localhost http://127.0.0.1'
+        EMAIL_HOST: 'smtp.gmail.com'
+        EMAIL_PORT: '587'
+        EMAIL_USE_TLS: 'True'
+        EMAIL_HOST_USER: 'dummy@gmail.com'
+        EMAIL_HOST_PASSWORD: 'dummy_password'
+        CLOUD_NAME: 'dummy_cloud'
+        API_KEY: '123456789'
+        API_SECRET: 'dummy_secret'
+        GOOGLE_CLIENT_ID: 'dummy_client_id'
       run: |
         python manage.py test
 
