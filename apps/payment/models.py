@@ -1,10 +1,6 @@
 from django.db import models
-
-
-class PaymentStatus(models.TextChoices):
-    UNPAID = 'UNPAID', 'Chưa thanh toán'
-    PAID = 'PAID', 'Đã thanh toán'
-    REFUNDED = 'REFUNDED', 'Đã hoàn tiền'
+from django.db.models import Q
+from django.utils.crypto import get_random_string
 
 
 class PaymentMethod(models.TextChoices):
@@ -22,18 +18,37 @@ class BaseModel(models.Model):
 
 
 class Payment(BaseModel):
-    appointment = models.OneToOneField('clinic.Appointment', on_delete=models.CASCADE, related_name='payment')
+    patient = models.ForeignKey('users.User', on_delete=models.PROTECT, related_name='payments')
+
+    appointment = models.ForeignKey('clinic.Appointment', on_delete=models.SET_NULL, null=True, blank=True)
+
+    prescription = models.ForeignKey('pharmacy.Prescription', on_delete=models.SET_NULL, null=True, blank=True)
+
+    #rủi ro trùng code
+    code = models.CharField(max_length=20, unique=True, db_index=True)
 
     amount = models.DecimalField(max_digits=12, decimal_places=0)
 
-    status = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.UNPAID)
-    payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices, null=True, blank=True)
+    method = models.CharField(max_length=20, choices=PaymentMethod.choices, null=True, blank=True)
+
+    nurse = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, blank=True,
+                                related_name='collected_payments')
+
+    is_paid = models.BooleanField(default=False)
 
     paid_at = models.DateTimeField(null=True, blank=True)
 
-    # Người thu tiền (Thường là Y tá/Thu ngân)
-    cashier = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, blank=True,
-                                related_name='collected_payments')
+    def save(self, *args, **kwargs):
+        if not self.code:
+            self.code = get_random_string(length=6, allowed_chars='0123456789')
 
-    def __str__(self):
-        return f"Hóa đơn {self.id} - {self.total_amount} ({self.get_status_display()})"
+        super().save(*args, **kwargs)
+
+    class Meta:
+        #ràng buộc phải thuộc 1 trong 2 loại
+        constraints = [
+            models.CheckConstraint(
+                check=Q(appointment__isnull=False) | Q(prescription__isnull=False),
+                name='payment_must_have_source'
+            )
+        ]

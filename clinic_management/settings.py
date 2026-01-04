@@ -140,7 +140,7 @@ from celery.schedules import crontab
 
 CELERY_BEAT_SCHEDULE = {
     'auto_clone_schedule': {
-        'task': 'apps.clinic.tasks.auto_clone_next_week_schedule',
+        'task': 'apps.clinic.tasks.auto_clone_schedule',
         'schedule': crontab(day_of_week=1, hour=0, minute=0)
     },
 }
