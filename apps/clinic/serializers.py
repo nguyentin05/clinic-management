@@ -1,5 +1,6 @@
 from datetime import time, timedelta, datetime
 
+from django.db import transaction
 from rest_framework import serializers
 from django.utils import timezone
 
@@ -37,10 +38,8 @@ class WorkScheduleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = WorkSchedule
-        fields = [
-            'id', 'day_of_week', 'day_of_week_display', 'start_time',
-            'end_time', 'shift', 'shift_display', 'is_appointable'
-        ]
+        fields = ['id', 'day_of_week', 'day_of_week_display', 'start_time',
+                  'end_time', 'shift', 'shift_display', 'is_appointable']
         read_only_fields = ['id', 'is_appointable']
 
     def validate(self, attrs):
@@ -86,8 +85,8 @@ class RegisterScheduleSerializer(serializers.Serializer):
         return value
 
     def validate(self, attrs):
-        # if timezone.now().weekday() > 4:
-        #     raise serializers.ValidationError('Đã hết hạn đăng ký lịch.')
+        if timezone.now().weekday() > 4:
+            raise serializers.ValidationError('Đã hết hạn đăng ký lịch.')
 
         schedules = attrs.get('schedules', [])
 
@@ -175,13 +174,10 @@ class RegisterScheduleSerializer(serializers.Serializer):
 
         return WorkSchedule.objects.bulk_create(schedules)
 
-#tạo lịch hẹn
+
+# tạo lịch hẹn
 class CreateAppointmentSerializer(serializers.ModelSerializer):
-    service_ids = serializers.ListField(
-        child=serializers.IntegerField(),
-        write_only=True,
-        required=True
-    )
+    service_ids = serializers.ListField(child=serializers.IntegerField(), write_only=True, required=True)
 
     class Meta:
         model = Appointment
@@ -191,7 +187,7 @@ class CreateAppointmentSerializer(serializers.ModelSerializer):
         if value < timezone.now().date():
             raise serializers.ValidationError('Không thể đặt lịch hẹn trong quá khứ.')
 
-        # giới hạn 2 tuần: ngày hôm nay + số ngày tới chủ nhật và thêm 1 tuần
+        #giới hạn 2 tuần: ngày hôm nay + số ngày tới chủ nhật và thêm 1 tuần
         max_date = timezone.now().date() + timedelta(days=6 - timezone.now().weekday()) + timedelta(days=7)
         if value > max_date:
             raise serializers.ValidationError('Chỉ có thể đặt lịch hẹn trước chủ nhật tuần sau.')
@@ -245,6 +241,23 @@ class CreateAppointmentSerializer(serializers.ModelSerializer):
                 f"Bác sĩ không có lịch làm việc vào thời gian này."
             )
 
+        attrs['work_schedule'] = has_schedule
+        return attrs
+
+    @transaction.atomic
+    def create(self, validated_data):
+        end_time = validated_data['end_time']
+        services = validated_data['services']
+        work_schedule = validated_data['work_schedule']
+        total_price = validated_data['total_price']
+        patient = self.context['request'].user
+        doctor = validated_data['doctor']
+        date = validated_data['date']
+        start_time = validated_data['start_time']
+
+        # Xóa field input ảo
+        validated_data.pop('service_ids')
+
         # tìm coi có kẹt lịch với lịch khác ko
         overlapping = Appointment.objects.filter(
             doctor=doctor,
@@ -255,22 +268,7 @@ class CreateAppointmentSerializer(serializers.ModelSerializer):
         ).exists()
 
         if overlapping:
-            raise serializers.ValidationError(
-                'Bác sĩ đã có lịch hẹn vào thời gian này.'
-            )
-
-        attrs['work_schedule'] = has_schedule
-        return attrs
-
-    def create(self, validated_data):
-        end_time = validated_data['end_time']
-        services = validated_data['services']
-        work_schedule = validated_data['work_schedule']
-        total_price = validated_data['total_price']
-        patient = self.context['request'].user
-
-        # Xóa field input ảo
-        validated_data.pop('service_ids')
+            raise serializers.ValidationError('Bác sĩ đã có lịch hẹn vào thời gian này.')
 
         appointment = Appointment.objects.create(
             patient=patient,
@@ -293,7 +291,9 @@ class AppointmentSerializer(serializers.ModelSerializer):
         model = Appointment
         fields = ['id', 'date', 'start_time', 'end_time', 'type', 'type_display', 'status', 'status_display']
 
-#xem chi tiết
+
+
+# xem chi tiết
 class AppointmentDetailSerializer(AppointmentSerializer):
     doctor = DoctorInfoSerializer()
     patient = PatientInfoSerializer()
@@ -302,19 +302,27 @@ class AppointmentDetailSerializer(AppointmentSerializer):
     class Meta:
         model = AppointmentSerializer.Meta.model
         fields = AppointmentSerializer.Meta.fields + ['doctor', 'patient', 'services', 'room', 'meeting_link',
-                                                      'patient_note', 'employee_note', 'confirmed_at', 'created_date']
+                                                      'patient_note', 'doctor_note', 'confirmed_at', 'created_date',
+                                                      'deleted_at']
 
-#xác nhận
-class ConfirmAppointmentSerializer(serializers.ModelSerializer):
-    room = serializers.PrimaryKeyRelatedField(
-        queryset=Room.objects.all(),
-        required=False
-    )
-    employee_note = serializers.CharField(required=False)
+
+class AppointmentStateSerializer(serializers.ModelSerializer):
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
 
     class Meta:
         model = Appointment
-        fields = ['id', 'room', 'employee_note']
+        fields = ['id', 'status', 'status_display', 'updated_date', 'reason', 'deleted_at', 'confirmed_at', 'doctor_note', 'meeting_link', 'room']
+
+# xác nhận
+class ConfirmAppointmentSerializer(serializers.ModelSerializer):
+    room = serializers.PrimaryKeyRelatedField(
+        queryset=Room.objects.all(),
+        required=False)
+    doctor_note = serializers.CharField(required=False)
+
+    class Meta:
+        model = Appointment
+        fields = ['id', 'room', 'doctor_note']
 
     def validate(self, attrs):
         appointment = self.instance
@@ -333,10 +341,11 @@ class ConfirmAppointmentSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         instance.status = AppointmentStatus.CONFIRMED
         instance.confirmed_at = timezone.now()
-        instance.employee_note = validated_data['employee_note']
+        instance.doctor_note = validated_data['doctor_note']
         if instance.type == AppointmentType.OFFLINE:
             instance.room = validated_data['room']
             instance.meeting_link = None
+
         else:
             instance.room = None
             instance.meeting_link = 'https://meet.google.com/new-meeting-generated-by-system'
@@ -344,15 +353,17 @@ class ConfirmAppointmentSerializer(serializers.ModelSerializer):
 
         return instance
 
+
 class RoomSerializer(serializers.ModelSerializer):
     class Meta:
         model = Room
         fields = ['id', 'name']
 
+
 class StartAppointmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Appointment
-        fields = ['id']
+        fields = []
 
     def validate(self, attrs):
         appointment = self.instance
@@ -366,5 +377,30 @@ class StartAppointmentSerializer(serializers.ModelSerializer):
         instance.status = AppointmentStatus.IN_PROCESS
         instance.save()
         MedicalRecord.objects.get_or_create(appointment=instance)
+
+        return instance
+
+class CancelAppointmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Appointment
+        fields = ['reason']
+
+    def validate(self, attrs):
+        appointment = self.instance
+
+        if appointment.status != AppointmentStatus.PENDING:
+            raise serializers.ValidationError('Không thể hủy lịch hẹn.')
+
+        time_diff = timezone.make_aware(datetime.combine(appointment.date, appointment.start_time)) - timezone.now()
+        if time_diff.total_seconds() < 7200:
+            raise serializers.ValidationError('Chỉ được hủy lịch hẹn trước 2 tiếng.')
+
+        return attrs
+
+    def update(self, instance, validated_data):
+        instance.status = AppointmentStatus.CANCELLED
+        instance.reason = validated_data['reason']
+        instance.deleted_at = timezone.now()
+        instance.save()
 
         return instance

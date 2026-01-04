@@ -37,7 +37,7 @@ class GoogleAuthSerializer(serializers.Serializer):
             )
 
         except ValueError:
-            raise serializers.ValidationError({'token': 'Token Google không hợp lệ hoặc đã hết hạn.'})
+            raise serializers.ValidationError('Token Google không hợp lệ hoặc đã hết hạn.')
 
         email = id_info['email']
         first_name = id_info.get('given_name', '')
@@ -48,7 +48,7 @@ class GoogleAuthSerializer(serializers.Serializer):
 
         if user:
             if user.user_role != UserRole.PATIENT:
-                raise serializers.ValidationError({"error": "Tài khoản Nhân viên vui lòng đăng nhập bằng mật khẩu."})
+                raise serializers.ValidationError("Tài khoản Nhân viên vui lòng đăng nhập bằng mật khẩu.")
         else:
             def upload_avatar(url):
                 try:
@@ -276,10 +276,10 @@ class VerifyOTPSerializer(serializers.Serializer):
         cached_otp = cache.get(f"password_reset_otp:{email}")
 
         if cached_otp is None:
-            raise serializers.ValidationError({"otp": "OTP hết hạn hoặc không tồn tại."})
+            raise serializers.ValidationError("OTP hết hạn hoặc không tồn tại.")
 
         if cached_otp != otp:
-            raise serializers.ValidationError({"otp": "OTP không chính xác."})
+            raise serializers.ValidationError("OTP không chính xác.")
 
         return attrs
 
@@ -298,7 +298,7 @@ class ResetPasswordSerializer(serializers.Serializer):
         email = cache.get(f"reset_token:{token}")
 
         if not email:
-            raise serializers.ValidationError({"token": "Token hết hạn hoặc không hợp lệ."})
+            raise serializers.ValidationError("Token hết hạn hoặc không hợp lệ.")
 
         attrs['email'] = email
         return attrs

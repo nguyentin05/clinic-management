@@ -115,6 +115,7 @@ class Appointment(BaseModel):
     end_time = models.TimeField()
 
     type = models.CharField(max_length=10, choices=AppointmentType.choices, null=True, blank=True)
+
     status = models.CharField(max_length=20, choices=AppointmentStatus.choices, default=AppointmentStatus.PENDING)
 
     room = models.ForeignKey(Room, on_delete=models.SET_NULL, null=True, blank=True, related_name='appointments')
@@ -123,7 +124,7 @@ class Appointment(BaseModel):
 
     patient_note = models.TextField(blank=True)
 
-    employee_note = models.TextField(blank=True)
+    doctor_note = models.TextField(blank=True)
 
     confirmed_at = models.DateTimeField(null=True, blank=True)
 
@@ -132,5 +133,18 @@ class Appointment(BaseModel):
     work_schedule = models.ForeignKey(WorkSchedule, on_delete=models.SET_NULL, null=True, blank=True,
                                       related_name='appointments')
 
+    reason = models.TextField(blank=True)
+
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    completed_at = models.DateTimeField(null=True, blank=True)
+
     def __str__(self):
         return f"Hẹn: {self.doctor.get_full_name()}: {self.date} ({self.start_time} - {self.end_time})"
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['doctor', 'date', 'status']),
+            models.Index(fields=['patient', 'date']),
+            models.Index(fields=['date', 'start_time']),
+        ]
