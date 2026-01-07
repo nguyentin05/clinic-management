@@ -29,6 +29,10 @@ jobs:
         python-version: '3.13'
         cache: 'pip'
 
+    - name: Create Firebase Credentials File
+      run: |
+        echo "${{ secrets.FIREBASE_CREDENTIALS_BASE64 }}" | base64 -d > firebase-credentials.json
+
     - name: Install Dependencies
       run: |
         python -m pip install --upgrade pip
