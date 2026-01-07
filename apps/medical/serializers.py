@@ -33,9 +33,9 @@ class TestOrderDetailSerializer(TestOrderSerializer):
     class Meta:
         model = TestOrderSerializer.Meta.model
         fields = TestOrderSerializer.Meta.fields + \
-        ['nurse', 'result', 'reason', 'deleted_by', 'deleted_at', 'completed_at']
+        ['nurse', 'result', 'reason', 'deleted_by', 'deleted_date', 'completed_date']
         read_only_fields = TestOrderSerializer.Meta.read_only_fields + \
-        ['nurse', 'reason', 'deleted_by', 'deleted_at', 'completed_at']
+        ['nurse', 'reason', 'deleted_by', 'deleted_date', 'completed_date']
 
 
 class ConfirmTestOrderSerializer(serializers.ModelSerializer):
@@ -51,7 +51,7 @@ class ConfirmTestOrderSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         instance.status = TestStatus.PROCESSING
-        instance.confirmed_at = timezone.now()
+        instance.confirmed_date = timezone.now()
         instance.nurse = self.context['request'].user
         instance.save()
 
@@ -78,7 +78,7 @@ class CancelTestOrderSerializer(serializers.ModelSerializer):
         instance.status = TestStatus.CANCELLED
         instance.active = False
         instance.reason = validated_data['reason']
-        instance.deleted_at = timezone.now()
+        instance.deleted_date = timezone.now()
         instance.deleted_by = self.context['request'].user
         instance.save()
 
@@ -102,7 +102,7 @@ class CompleteTestOrderSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         instance.status = TestStatus.COMPLETED
-        instance.completed_at = timezone.now()
+        instance.completed_date = timezone.now()
         instance.save()
 
         return instance

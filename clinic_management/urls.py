@@ -38,11 +38,12 @@ router = DefaultRouter()
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('o/', include('oauth2_provider.urls', namespace='oauth2_provider')),
-    path('users/', include('apps.users.urls')),
+    path('', include('apps.users.urls')),
     path('', include('apps.medical.urls')),
     path('', include('apps.clinic.urls')),
     path('', include('apps.payment.urls')),
     path('', include('apps.pharmacy.urls')),
+    path('', include('apps.notifications.urls')),
     re_path(r'^swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),
     re_path(r'^swagger/$', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     re_path(r'^redoc/$', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),

@@ -36,7 +36,7 @@ class Payment(BaseModel):
 
     is_paid = models.BooleanField(default=False)
 
-    paid_at = models.DateTimeField(null=True, blank=True)
+    paid_date = models.DateTimeField(null=True, blank=True)
 
     def save(self, *args, **kwargs):
         if not self.code:

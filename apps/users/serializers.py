@@ -309,3 +309,20 @@ class ResetPasswordSerializer(serializers.Serializer):
         user.save()
 
         return user
+
+
+# cập nhật fcm
+class UpdateFCMSerializer(serializers.Serializer):
+    fcm_token = serializers.CharField(max_length=255)
+
+    def validate_fcm_token(self, value):
+        if not value or len(value) < 10:
+            raise serializers.ValidationError("FCM token không hợp lệ")
+        return value
+
+    def update(self, instance, validated_data):
+        if instance.fcm_token != validated_data['fcm_token']:
+            instance.fcm_token = validated_data['fcm_token']
+            instance.save()
+
+        return instance
