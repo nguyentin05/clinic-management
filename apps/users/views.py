@@ -11,24 +11,32 @@ from .models import User, PatientProfile
 from .perms import IsDoctorOrPatientOwner
 from .serializers import UserSerializer, GoogleAuthSerializer, UserDetailSerializer, UserUpdateSerializer, \
     PatientProfileSerializer, ChangePasswordSerializer, ResetPasswordRequestSerializer, VerifyOTPSerializer, \
-    ResetPasswordSerializer
+    ResetPasswordSerializer, UpdateFCMSerializer
 
 
 class UserView(viewsets.ViewSet, generics.CreateAPIView):
     queryset = User.objects.filter(is_active=True)
-    serializer_class = UserSerializer
 
     def get_permissions(self):
         if self.request.method == 'get' or self.request.method == 'patch':
             return [permissions.IsAuthenticated()]
         return [permissions.AllowAny()]
 
+    def get_serializer_class(self):
+        if self.action == 'change_password':
+            return ChangePasswordSerializer
+        if self.action == 'fcm_update':
+            return UpdateFCMSerializer
+        if self.action == 'get_current_user':
+            return UserUpdateSerializer
+        return UserSerializer
+
     @action(methods=['get', 'patch'], url_path='current-user', detail=False)
     def get_current_user(self, request):
         user = request.user
 
         if request.method == 'patch':
-            serializer = UserUpdateSerializer(user, data=request.data, partial=True)
+            serializer = self.get_serializer(user, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
             serializer.save()
 
@@ -44,11 +52,21 @@ class UserView(viewsets.ViewSet, generics.CreateAPIView):
     def change_password(self, request):
         user = request.user
 
-        serializer = ChangePasswordSerializer(user, data=request.data)
+        serializer = self.get_serializer(user, data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
         return Response({"message": "Đổi mật khẩu thành công!"}, status=status.HTTP_200_OK)
+
+    @action(methods=['patch'], url_path='fcm-update', detail=False)
+    def fcm_update(self, request):
+        user = request.user
+
+        serializer = self.get_serializer(user, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response({"message": "Cập nhật fcm thành công!"}, status=status.HTTP_200_OK)
 
 
 class PatientProfileView(viewsets.ViewSet, generics.RetrieveUpdateAPIView):

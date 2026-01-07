@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 
+from ckeditor_demo.settings import BASE_DIR
 from django.conf.global_settings import AUTH_USER_MODEL, MEDIA_URL, STATIC_ROOT, EMAIL_BACKEND, DEFAULT_FROM_EMAIL
 
 import environ
@@ -38,6 +39,7 @@ ALLOWED_HOSTS = env('ALLOWED_HOSTS').split(' ')
 # Application definition
 
 INSTALLED_APPS = [
+    'channels',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -49,13 +51,14 @@ INSTALLED_APPS = [
     'apps.medical',
     'apps.pharmacy',
     'apps.users',
+    'apps.notifications',
     'oauth2_provider',
     'rest_framework',
     'corsheaders',
     'drf_yasg',
     'debug_toolbar',
     'ckeditor',
-    'ckeditor_uploader'
+    'ckeditor_uploader',
 ]
 
 MIDDLEWARE = [
@@ -106,6 +109,22 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'clinic_management.wsgi.application'
+ASGI_APPLICATION = 'clinic_management.asgi.application'
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            'hosts': [('127.0.0.1', 6379)],
+        },
+    },
+}
+
+import firebase_admin
+from firebase_admin import credentials
+
+cred = credentials.Certificate(BASE_DIR / 'firebase-credentials.json')
+firebase_admin.initialize_app(cred)
+
 
 
 # Database
@@ -135,6 +154,9 @@ CACHES = {
 CELERY_BROKER_URL = env('REDIS_URL')
 CELERY_RESULT_BACKEND = env('REDIS_URL')
 CELERY_TIMEZONE = 'Asia/Ho_Chi_Minh'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
 
 from celery.schedules import crontab
 
@@ -142,6 +164,14 @@ CELERY_BEAT_SCHEDULE = {
     'auto_clone_schedule': {
         'task': 'apps.clinic.tasks.auto_clone_schedule',
         'schedule': crontab(day_of_week=1, hour=0, minute=0)
+    },
+    'send-appointment-reminders-every-hour': {
+        'task': 'apps.notifications.tasks.send_appointment_reminders',
+        'schedule': crontab(minute=0),  # Mỗi giờ
+    },
+    'cleanup-old-notifications-daily': {
+        'task': 'apps.notifications.tasks.cleanup_old_notifications',
+        'schedule': crontab(hour=2, minute=0),  # 2h sáng mỗi ngày
     },
 }
 
@@ -153,6 +183,7 @@ EMAIL_PORT = env('EMAIL_PORT')
 EMAIL_USE_TLS = env('EMAIL_USE_TLS')
 EMAIL_HOST_USER = env('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
+DEFAULT_FROM_EMAIL = 'ClinicApp <noreply@clinicapp.com>'
 
 OTP_EXPIRY_MINUTES = 10
 OTP_MAX_ATTEMPTS = 3

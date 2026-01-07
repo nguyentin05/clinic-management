@@ -3,6 +3,7 @@ from django.dispatch import receiver, Signal
 from django.db.models import Sum
 
 from apps.clinic.models import Appointment, AppointmentStatus
+from apps.notifications.services import PrescriptionNotifications, PaymentNotifications
 from apps.payment.models import Payment
 
 
@@ -32,7 +33,7 @@ def create_appointment_payment(sender, instance, created, **kwargs):
 dispense_completed = Signal()
 
 @receiver(dispense_completed)
-def create_bill_after_dispense(sender, **kwargs):
+def create_prescription_payment(sender, **kwargs):
     prescription = kwargs.get('prescription')
 
     Payment.objects.create(
@@ -41,3 +42,10 @@ def create_bill_after_dispense(sender, **kwargs):
         total_amount=kwargs.get('total_amount'),
         is_paid=False
     )
+    #gửi thông báo luôn cho bệnh nhân
+    PrescriptionNotifications.notify_conmpleted(prescription)
+
+@receiver(post_save, sender=Payment)
+def create_payment(sender, instance, created, **kwargs):
+    if created:
+        PaymentNotifications.notify_created(instance)

@@ -1,6 +1,5 @@
+firebase-credentials.json
 .DS_Store
-backend/venv/
-frontend/node_modules/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

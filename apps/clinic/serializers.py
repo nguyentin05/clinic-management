@@ -302,8 +302,8 @@ class AppointmentDetailSerializer(AppointmentSerializer):
     class Meta:
         model = AppointmentSerializer.Meta.model
         fields = AppointmentSerializer.Meta.fields + ['doctor', 'patient', 'services', 'room', 'meeting_link',
-                                                      'patient_note', 'doctor_note', 'confirmed_at', 'created_date',
-                                                      'deleted_at']
+                                                      'patient_note', 'doctor_note', 'confirmed_date', 'created_date',
+                                                      'deleted_date']
 
 
 class AppointmentStateSerializer(serializers.ModelSerializer):
@@ -311,7 +311,7 @@ class AppointmentStateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Appointment
-        fields = ['id', 'status', 'status_display', 'updated_date', 'reason', 'deleted_at', 'confirmed_at', 'doctor_note', 'meeting_link', 'room']
+        fields = ['id', 'status', 'status_display', 'updated_date', 'reason', 'deleted_date', 'confirmed_date', 'doctor_note', 'meeting_link', 'room']
 
 # xác nhận
 class ConfirmAppointmentSerializer(serializers.ModelSerializer):
@@ -340,7 +340,7 @@ class ConfirmAppointmentSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         instance.status = AppointmentStatus.CONFIRMED
-        instance.confirmed_at = timezone.now()
+        instance.confirmed_date = timezone.now()
         instance.doctor_note = validated_data['doctor_note']
         if instance.type == AppointmentType.OFFLINE:
             instance.room = validated_data['room']

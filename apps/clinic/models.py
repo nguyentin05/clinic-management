@@ -126,7 +126,7 @@ class Appointment(BaseModel):
 
     doctor_note = models.TextField(blank=True)
 
-    confirmed_at = models.DateTimeField(null=True, blank=True)
+    confirmed_date = models.DateTimeField(null=True, blank=True)
 
     total_price = models.DecimalField(max_digits=12, decimal_places=0, default=0)
 
@@ -135,9 +135,9 @@ class Appointment(BaseModel):
 
     reason = models.TextField(blank=True)
 
-    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_date = models.DateTimeField(null=True, blank=True)
 
-    completed_at = models.DateTimeField(null=True, blank=True)
+    completed_date = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f"Hẹn: {self.doctor.get_full_name()}: {self.date} ({self.start_time} - {self.end_time})"
