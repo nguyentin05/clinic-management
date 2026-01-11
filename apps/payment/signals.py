@@ -11,9 +11,9 @@ from apps.payment.models import Payment
 def create_appointment_payment(sender, instance, created, **kwargs):
     if instance.status == AppointmentStatus.COMPLETED:
         doctor_fee = instance.doctor.doctor_profile.consultation_fee
-        #aggregate trả về từ điển nên lấy phải lấy key total mới đúng
-        services_fee = instance.medical_record.test_orders.filter(deleted_at__isnull=True)\
-                .aggregate(total=Sum('service__price'))['total']
+        # aggregate trả về từ điển nên lấy phải lấy key total mới đúng
+        services_fee = instance.medical_record.test_orders.filter(deleted_date__isnull=True) \
+            .aggregate(total=Sum('service__price'))['total'] or 0
 
         services_fee += instance.services.aggregate(total=Sum('price'))['total']
 
@@ -22,15 +22,17 @@ def create_appointment_payment(sender, instance, created, **kwargs):
         Payment.objects.create(
             appointment=instance,
             patient=instance.patient,
-            total_amount=total_amount,
+            amount=total_amount,
             is_paid=False
         )
 
         instance.total_price = total_amount
-        #Dùng update_fields để chỉ định đúng trường cập nhật để ko chạy lại signal
-        instance.save(update_fields=['total_price'])
+        # Dùng update_fields để chỉ định đúng trường cập nhật để ko chạy lại signal
+        Appointment.objects.filter(pk=instance.pk).update(total_price=total_amount)
+
 
 dispense_completed = Signal()
+
 
 @receiver(dispense_completed)
 def create_prescription_payment(sender, **kwargs):
@@ -42,10 +44,14 @@ def create_prescription_payment(sender, **kwargs):
         total_amount=kwargs.get('total_amount'),
         is_paid=False
     )
-    #gửi thông báo luôn cho bệnh nhân
-    PrescriptionNotifications.notify_conmpleted(prescription)
+    # gửi thông báo luôn cho bệnh nhân
+    PrescriptionNotifications.notify_completed(prescription)
+
 
 @receiver(post_save, sender=Payment)
 def create_payment(sender, instance, created, **kwargs):
     if created:
         PaymentNotifications.notify_created(instance)
+
+    if instance.tracker.has_changed('is_paid') and instance.is_paid == True:
+        PaymentNotifications.notify_completed(instance)

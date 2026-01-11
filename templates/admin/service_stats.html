@@ -1,0 +1,221 @@
+{% extends 'admin/base_site.html' %}
+{% load static %}
+
+{% block extrahead %}
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex align-items-center mb-4">
+        <h2 class="mb-0 text-black"><i class="fas fa-briefcase-medical me-2"></i>Báo Cáo Thống Kê Dịch Vụ</h2>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-md-6">
+            <div class="card border-primary border-2 shadow py-2 h-100">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="fw-bold text-primary mb-1">
+                                TỔNG SỐ DỊCH VỤ
+                            </div>
+                            <div class="h2 mb-0 fw-bold text-gray-800">{{ total_services }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-list-ul fa-2x text-gray-300" style="color: #dddfeb;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card border-success border-2 shadow py-2 h-100">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="fw-bold text-success mb-1">
+                                TỔNG LƯỢT SỬ DỤNG
+                            </div>
+                            <div class="h2 mb-0 fw-bold text-gray-800">{{ total_use }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-check-circle fa-2x text-gray-300" style="color: #dddfeb;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+
+        <div class="col-lg-6">
+            <div class="card shadow mb-4 h-100">
+                <div class="card-header py-3 bg-white d-flex align-items-center justify-content-between">
+                    <h6 class="m-0 h5 fw-bold text-primary">PHÂN BỐ THEO CHUYÊN KHOA</h6>
+                </div>
+                <div class="card-body">
+                    <div style="height: 250px; width: 100%;" class="mb-3">
+                        <canvas id="specialtyChart"></canvas>
+                    </div>
+                    <div class="table-container">
+                        <table class="table table-bordered table-striped table-hover small">
+                            <thead class="table-primary sticky-top">
+                            <tr>
+                                <th class="fs-6">Chuyên khoa</th>
+                                <th class="text-center fs-6">Số dịch vụ</th>
+                                <th class="text-end fs-6">Lượt dùng</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {% for s in specialty_stats %}
+                            <tr>
+                                <td class="fs-6">{{ s.specialty }}</td>
+                                <td class="text-center fs-6">{{ s.service_count }}</td>
+                                <td class="text-end fw-bold fs-6">{{ s.usage_count }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="3" class="text-center">Chưa có dữ liệu</td>
+                            </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card shadow mb-4 h-100">
+                <div class="card-header py-3 bg-white d-flex align-items-center justify-content-between">
+                    <h6 class="m-0 h5 fw-bold text-primary">THỐNG KÊ DỊCH VỤ</h6>
+                </div>
+                <div class="card-body">
+                    <div style="height: 250px; width: 100%;" class="mb-3">
+                        <canvas id="testChart"></canvas>
+                    </div>
+
+                    <div class="table-container">
+                        <table class="table table-bordered table-striped table-hover small">
+                            <thead class="table-primary sticky-top">
+                            <tr>
+                                <th class="fs-6">Tên dịch vụ</th>
+                                <th class="text-end fs-6">Tổng</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {% for s in services_stats %}
+                            <tr>
+                                <td class="fs-6">{{ s.name }}</td>
+                                <td class="text-end fw-bold fs-6">{{ s.total_use }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center">Chưa có dữ liệu</td>
+                            </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+<script>
+    Chart.defaults.font.family = 'system-ui, -apple-system, "Segoe UI", Roboto';
+    Chart.defaults.color = '#858796';
+
+    let labels = [], labels2 = []
+    let data = [], data2 = []
+    let colors = [], colors2 = []
+    let borderColors = [], borderColors2 = []
+
+    {% for s in specialty_stats %}
+        data.push({{ s.usage_count }})
+        labels.push('{{ s.specialty }}')
+        r = parseInt(Math.random() * 255)
+        g = parseInt(Math.random() * 255)
+        b = parseInt(Math.random() * 255)
+
+        colors.push(`rgba(${r}, ${g}, ${b}, 0.5)`)
+        borderColors.push(`rgba(${r}, ${g}, ${b}, 1)`)
+    {% endfor %}
+
+    {% for s in services_stats %}
+        data2.push({{ s.total_use }})
+        labels2.push('{{ s.name }}')
+        r = parseInt(Math.random() * 255)
+        g = parseInt(Math.random() * 255)
+        b = parseInt(Math.random() * 255)
+
+        colors2.push(`rgba(${r}, ${g}, ${b}, 0.5)`)
+        borderColors2.push(`rgba(${r}, ${g}, ${b}, 1)`)
+    {% endfor %}
+
+    options = {
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'right',
+                labels: { usePointStyle: true, boxWidth: 10 }
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        return ` ${context.label}: ${context.raw} lượt`;
+                    }
+                }
+            }
+        }
+    }
+
+    options2 = {
+        maintainAspectRatio: false,
+        indexAxis: 'y',
+        scales: {
+            x: {
+                beginAtZero: true,
+                grid: { display: false }
+            },
+            y: {
+                grid: { borderDash: [2, 2], drawBorder: false }
+            }
+        },
+        plugins: {
+            legend: { display: false }
+        }
+    }
+
+    window.onload = function() {
+        const ctx = document.getElementById('specialtyChart').getContext('2d')
+        const ctx2 = document.getElementById('testChart').getContext('2d')
+
+        loadChart(ctx, labels, data, 'doughnut', colors, borderColors, options)
+        loadChart(ctx2, labels2, data2, 'bar', colors2, borderColors2, options2)
+    }
+
+function loadChart(ctx, labels, data, type, colors, borderColors, options) {
+    const myChart = new Chart(ctx, {
+        type: type,
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: colors,
+                borderColor: borderColors,
+                borderWidth: 2,
+                hoverOffset: 10
+            }]
+        },
+        options: options
+    });
+}
+</script>
+{% endblock %}

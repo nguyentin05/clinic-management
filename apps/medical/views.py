@@ -5,23 +5,30 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.medical.models import TestOrder
-from apps.medical.perms import IsNurse
+from apps.medical.perms import IsOwnerTestOrder, IsOwnerTestOrderDoctorOrNurse, IsOwnerTestOrderNurse
 from apps.medical.serializers import TestOrderSerializer, ConfirmTestOrderSerializer, TestOrderDetailSerializer, \
-    CancelTestOrderSerializer, CompleteTestOrderSerializer
+    CancelTestOrderSerializer, CompleteTestOrderSerializer, UpdateTestOrderSerializer
+from apps.users.perms import IsNurse
 
 
-#CHƯA PHÂN QUYỀN
+# CHƯA PHÂN QUYỀN
 class TestOrderView(viewsets.ViewSet, generics.ListAPIView, generics.RetrieveAPIView):
     queryset = TestOrder.objects.filter(active=True)
 
     def get_permissions(self):
-        if self.action == 'list' or self.action == 'confirm_test':
+        if self.action in ['list', 'confirm_test']:
             return [IsNurse()]
+        if self.action == 'retrieve':
+            return [IsOwnerTestOrder()]
+        if self.action in ['cancel_test', 'update_test']:
+            return [IsOwnerTestOrderDoctorOrNurse()]
+        if self.action == 'complete_test':
+            return [IsOwnerTestOrderNurse()]
         return [IsAuthenticated()]
 
     def get_queryset(self):
         query = self.queryset.select_related(
-            'service', 'service__specialty', 'nurse','medical_record', 'medical_record__appointment',
+            'service', 'service__specialty', 'nurse', 'medical_record', 'medical_record__appointment',
             'medical_record__appointment__patient', 'medical_record__appointment__doctor'
         )
 
@@ -40,6 +47,8 @@ class TestOrderView(viewsets.ViewSet, generics.ListAPIView, generics.RetrieveAPI
             return CancelTestOrderSerializer
         if self.action == 'complete_test':
             return CompleteTestOrderSerializer
+        if self.action == 'update_test':
+            return UpdateTestOrderSerializer
 
         return TestOrderDetailSerializer
 
@@ -55,7 +64,9 @@ class TestOrderView(viewsets.ViewSet, generics.ListAPIView, generics.RetrieveAPI
 
         return Response(TestOrderDetailSerializer(test).data, status=status.HTTP_200_OK)
 
-    @swagger_auto_schema(operation_description='Tùy theo role mà gửi đúng trường nhé, ko là server nó ko nhận đâu:)')
+    @swagger_auto_schema(operation_description='Tùy theo role mà gửi đúng trường nhé, ko là server nó ko nhận đâu:)',
+                         request_body=UpdateTestOrderSerializer(),
+                         responses={status.HTTP_200_OK: TestOrderDetailSerializer()})
     # cập nhật này dùng cho cả y tá và bác sĩ nhưng phân theo role và trạng thái
     @action(methods=['patch'], detail=True, url_path='update')
     def update_test(self, request, pk):
@@ -63,9 +74,9 @@ class TestOrderView(viewsets.ViewSet, generics.ListAPIView, generics.RetrieveAPI
 
         serializer = self.get_serializer(test, data=request.data, partial=True, context={'request': request})
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        test = serializer.save()
 
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(TestOrderDetailSerializer(test).data, status=status.HTTP_200_OK)
 
     @swagger_auto_schema(operation_description='Xác nhận xét nghiệm', request_body=CancelTestOrderSerializer(),
                          responses={status.HTTP_200_OK: TestOrderDetailSerializer()})

@@ -1,6 +1,6 @@
 from django.db import models
 from django.db.models import Q
-from django.utils.crypto import get_random_string
+from model_utils import FieldTracker
 
 
 class PaymentMethod(models.TextChoices):
@@ -24,28 +24,23 @@ class Payment(BaseModel):
 
     prescription = models.ForeignKey('pharmacy.Prescription', on_delete=models.SET_NULL, null=True, blank=True)
 
-    #rủi ro trùng code
-    code = models.CharField(max_length=20, unique=True, db_index=True)
-
     amount = models.DecimalField(max_digits=12, decimal_places=0)
 
     method = models.CharField(max_length=20, choices=PaymentMethod.choices, null=True, blank=True)
 
     nurse = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, blank=True,
-                                related_name='collected_payments')
+                              related_name='collected_payments')
 
     is_paid = models.BooleanField(default=False)
 
     paid_date = models.DateTimeField(null=True, blank=True)
 
-    def save(self, *args, **kwargs):
-        if not self.code:
-            self.code = get_random_string(length=6, allowed_chars='0123456789')
+    transaction_id = models.CharField(max_length=255, blank=True, null=True)
 
-        super().save(*args, **kwargs)
+    tracker = FieldTracker()
 
     class Meta:
-        #ràng buộc phải thuộc 1 trong 2 loại
+        # ràng buộc phải thuộc 1 trong 2 loại
         constraints = [
             models.CheckConstraint(
                 check=Q(appointment__isnull=False) | Q(prescription__isnull=False),

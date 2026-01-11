@@ -11,8 +11,6 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
-
-from ckeditor_demo.settings import BASE_DIR
 from django.conf.global_settings import AUTH_USER_MODEL, MEDIA_URL, STATIC_ROOT, EMAIL_BACKEND, DEFAULT_FROM_EMAIL
 
 import environ
@@ -23,7 +21,6 @@ env = environ.Env(DEBUG=(bool, False))
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 environ.Env.read_env(BASE_DIR / '.env')
-
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
@@ -39,6 +36,7 @@ ALLOWED_HOSTS = env('ALLOWED_HOSTS').split(' ')
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'channels',
     'django.contrib.admin',
     'django.contrib.auth',
@@ -96,7 +94,7 @@ ROOT_URLCONF = 'clinic_management.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -110,6 +108,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'clinic_management.wsgi.application'
 ASGI_APPLICATION = 'clinic_management.asgi.application'
+
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
@@ -124,8 +123,6 @@ from firebase_admin import credentials
 
 cred = credentials.Certificate(BASE_DIR / 'firebase-credentials.json')
 firebase_admin.initialize_app(cred)
-
-
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
@@ -188,7 +185,7 @@ DEFAULT_FROM_EMAIL = 'ClinicApp <noreply@clinicapp.com>'
 OTP_EXPIRY_MINUTES = 10
 OTP_MAX_ATTEMPTS = 3
 
-AUTH_USER_MODEL='users.User'
+AUTH_USER_MODEL = 'users.User'
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
@@ -207,7 +204,6 @@ AUTH_PASSWORD_VALIDATORS = [
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
 ]
-
 
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
@@ -235,15 +231,29 @@ MEDIA_ROOT = BASE_DIR / 'media'
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
+
 cloudinary.config(
     cloud_name=env('CLOUD_NAME'),
     api_key=env('API_KEY'),
     api_secret=env('API_SECRET')
 )
 
-
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 GOOGLE_CLIENT_ID = env('GOOGLE_CLIENT_ID')
 
 CKEDITOR_UPLOAD_PATH = "images/lessons/"
+
+MOMO_PARTNER_CODE = env('MOMO_PARTNER_CODE')
+MOMO_ACCESS_KEY = env('MOMO_ACCESS_KEY')
+MOMO_SECRET_KEY = env('MOMO_SECRET_KEY')
+MOMO_ENDPOINT = env('MOMO_ENDPOINT')
+MOMO_IPN_URL = env('MOMO_IPN_URL')
+
+STRIPE_PUBLISHABLE_KEY = env('STRIPE_PUBLISHABLE_KEY')
+STRIPE_SECRET_KEY = env('STRIPE_SECRET_KEY')
+STRIPE_WEBHOOK_SECRET = env('STRIPE_WEBHOOK_SECRET')
+
+VNPAY_TMN_CODE = env('VNPAY_TMN_CODE')
+VNPAY_HASH_SECRET_KEY = env('VNPAY_HASH_SECRET_KEY')
+VNPAY_PAYMENT_URL = env('VNPAY_PAYMENT_URL')

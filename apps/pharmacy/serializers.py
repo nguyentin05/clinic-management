@@ -1,3 +1,4 @@
+from django.db import transaction
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
@@ -44,6 +45,7 @@ class PrescriptionSerializer(serializers.ModelSerializer):
 
         return attrs
 
+    @transaction.atomic
     def create(self, validated_data):
         items_data = validated_data.pop('items')
         appointment = self.context['appointment']
@@ -58,6 +60,7 @@ class PrescriptionSerializer(serializers.ModelSerializer):
 
         return prescription
 
+    @transaction.atomic
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items')
 
@@ -103,8 +106,9 @@ class DispenseSerializer(serializers.Serializer):
         attrs['items'] = items
         return attrs
 
+    @transaction.atomic
     def create(self, validated_data):
-        prescription = validated_data['prescription_id']
+        prescription = self.context['prescription']
         items = validated_data['items']
         user = self.context['request'].user
 
@@ -174,6 +178,7 @@ class ImportReceiptDetailSerializer(ImportReceiptSerializer):
         return value
 
     # tao phiếu nhập thuốc của dược sĩ
+    @transaction.atomic
     def create(self, validated_data):
         details_data = validated_data.pop('details')
         pharmacist = self.context['request'].user
@@ -194,6 +199,7 @@ class ImportReceiptDetailSerializer(ImportReceiptSerializer):
 
         return receipt
 
+    @transaction.atomic
     def update(self, instance, validated_data):
         if instance.status == ImportReceiptStatus.COMPLETED:
             raise serializers.ValidationError("Không thể chỉnh sửa phiếu đã hoàn tất.")
@@ -228,6 +234,7 @@ class ChangeReceiptSerializer(serializers.Serializer):
 
         return attrs
 
+    @transaction.atomic
     def update(self, instance, validated_data):
         action = self.context['action']
         if action == 'commit':

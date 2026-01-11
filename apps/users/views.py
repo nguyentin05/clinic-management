@@ -2,13 +2,13 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core.mail import send_mail
 from django.utils.crypto import get_random_string
-from rest_framework import viewsets, permissions, generics, status
+from rest_framework import viewsets, generics, status
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import User, PatientProfile
-from .perms import IsDoctorOrPatientOwner
 from .serializers import UserSerializer, GoogleAuthSerializer, UserDetailSerializer, UserUpdateSerializer, \
     PatientProfileSerializer, ChangePasswordSerializer, ResetPasswordRequestSerializer, VerifyOTPSerializer, \
     ResetPasswordSerializer, UpdateFCMSerializer
@@ -18,9 +18,9 @@ class UserView(viewsets.ViewSet, generics.CreateAPIView):
     queryset = User.objects.filter(is_active=True)
 
     def get_permissions(self):
-        if self.request.method == 'get' or self.request.method == 'patch':
-            return [permissions.IsAuthenticated()]
-        return [permissions.AllowAny()]
+        if self.action == 'create':
+            return [AllowAny()]
+        return [IsAuthenticated()]
 
     def get_serializer_class(self):
         if self.action == 'change_password':
@@ -72,11 +72,10 @@ class UserView(viewsets.ViewSet, generics.CreateAPIView):
 class PatientProfileView(viewsets.ViewSet, generics.RetrieveUpdateAPIView):
     queryset = PatientProfile.objects.all()
     serializer_class = PatientProfileSerializer
-    permission_classes = [IsDoctorOrPatientOwner]
 
 
 class GoogleLoginView(APIView):
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [AllowAny]
 
     def post(self, request):
         serializer = GoogleAuthSerializer(data=request.data)
@@ -86,7 +85,7 @@ class GoogleLoginView(APIView):
 
 
 class ResetPasswordRequestView(APIView):
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [AllowAny]
 
     def post(self, request):
         serializer = ResetPasswordRequestSerializer(data=request.data)
@@ -153,7 +152,7 @@ class ResetPasswordRequestView(APIView):
 
 
 class VerifyOTPView(APIView):
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [AllowAny]
 
     def post(self, request):
         serializer = VerifyOTPSerializer(data=request.data)
@@ -181,7 +180,7 @@ class VerifyOTPView(APIView):
 
 
 class ResetPasswordView(APIView):
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [AllowAny]
 
     def post(self, request):
         serializer = ResetPasswordSerializer(data=request.data)

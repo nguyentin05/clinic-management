@@ -1,10 +1,12 @@
 from datetime import time, timedelta, datetime
 
 from django.db import transaction
+from django.db.models import F
 from rest_framework import serializers
 from django.utils import timezone
 
-from apps.clinic.models import Specialty, Service, Appointment, WorkSchedule, AppointmentStatus, AppointmentType, Room
+from apps.clinic.models import Specialty, Service, Appointment, WorkSchedule, AppointmentStatus, AppointmentType, Room, \
+    Review
 from apps.medical.models import MedicalRecord
 from apps.users.serializers import DoctorInfoSerializer, PatientInfoSerializer
 
@@ -115,6 +117,7 @@ class RegisterScheduleSerializer(serializers.Serializer):
         return attrs
 
     # logic đăng kí lịch làm: lấy lịch cũ rồi ktra các booking có trong lịch cũ rồi ktra xem lịch mới có chứa booking đó ko
+    @transaction.atomic
     def update(self, instance, validated_data):
         user = instance
         week_start = validated_data['week_start']
@@ -187,7 +190,7 @@ class CreateAppointmentSerializer(serializers.ModelSerializer):
         if value < timezone.now().date():
             raise serializers.ValidationError('Không thể đặt lịch hẹn trong quá khứ.')
 
-        #giới hạn 2 tuần: ngày hôm nay + số ngày tới chủ nhật và thêm 1 tuần
+        # giới hạn 2 tuần: ngày hôm nay + số ngày tới chủ nhật và thêm 1 tuần
         max_date = timezone.now().date() + timedelta(days=6 - timezone.now().weekday()) + timedelta(days=7)
         if value > max_date:
             raise serializers.ValidationError('Chỉ có thể đặt lịch hẹn trước chủ nhật tuần sau.')
@@ -247,9 +250,7 @@ class CreateAppointmentSerializer(serializers.ModelSerializer):
     @transaction.atomic
     def create(self, validated_data):
         end_time = validated_data['end_time']
-        services = validated_data['services']
-        work_schedule = validated_data['work_schedule']
-        total_price = validated_data['total_price']
+        services = validated_data.pop('services')
         patient = self.context['request'].user
         doctor = validated_data['doctor']
         date = validated_data['date']
@@ -272,9 +273,6 @@ class CreateAppointmentSerializer(serializers.ModelSerializer):
 
         appointment = Appointment.objects.create(
             patient=patient,
-            end_time=end_time,
-            total_price=total_price,
-            work_schedule=work_schedule,
             status=AppointmentStatus.PENDING,
             **validated_data
         )
@@ -290,7 +288,6 @@ class AppointmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Appointment
         fields = ['id', 'date', 'start_time', 'end_time', 'type', 'type_display', 'status', 'status_display']
-
 
 
 # xem chi tiết
@@ -311,7 +308,9 @@ class AppointmentStateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Appointment
-        fields = ['id', 'status', 'status_display', 'updated_date', 'reason', 'deleted_date', 'confirmed_date', 'doctor_note', 'meeting_link', 'room']
+        fields = ['id', 'status', 'status_display', 'updated_date', 'reason', 'deleted_date', 'confirmed_date',
+                  'doctor_note', 'meeting_link', 'room']
+
 
 # xác nhận
 class ConfirmAppointmentSerializer(serializers.ModelSerializer):
@@ -338,6 +337,7 @@ class ConfirmAppointmentSerializer(serializers.ModelSerializer):
 
         return attrs
 
+    @transaction.atomic
     def update(self, instance, validated_data):
         instance.status = AppointmentStatus.CONFIRMED
         instance.confirmed_date = timezone.now()
@@ -373,12 +373,14 @@ class StartAppointmentSerializer(serializers.ModelSerializer):
 
         return attrs
 
+    @transaction.atomic
     def update(self, instance, validated_data):
         instance.status = AppointmentStatus.IN_PROCESS
         instance.save()
         MedicalRecord.objects.get_or_create(appointment=instance)
 
         return instance
+
 
 class CancelAppointmentSerializer(serializers.ModelSerializer):
     class Meta:
@@ -391,16 +393,67 @@ class CancelAppointmentSerializer(serializers.ModelSerializer):
         if appointment.status != AppointmentStatus.PENDING:
             raise serializers.ValidationError('Không thể hủy lịch hẹn.')
 
-        time_diff = timezone.make_aware(datetime.combine(appointment.date, appointment.start_time)) - timezone.now()
-        if time_diff.total_seconds() < 7200:
-            raise serializers.ValidationError('Chỉ được hủy lịch hẹn trước 2 tiếng.')
-
         return attrs
 
+    @transaction.atomic
     def update(self, instance, validated_data):
         instance.status = AppointmentStatus.CANCELLED
         instance.reason = validated_data['reason']
-        instance.deleted_at = timezone.now()
+        instance.deleted_date = timezone.now()
         instance.save()
 
         return instance
+
+
+class CompleteAppointmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Appointment
+        fields = []
+
+    def validate(self, attrs):
+        appointment = self.instance
+
+        if appointment.status != AppointmentStatus.IN_PROCESS:
+            raise serializers.ValidationError('Lịch hẹn phải ở trạng thái đang diễn ra mới có thể hoàn thành cuộc hẹn')
+
+        return attrs
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        instance.status = AppointmentStatus.COMPLETED
+        instance.save()
+        profile = instance.doctor.doctor_profile
+        profile.total_patients = F('total_patients') + 1
+        profile.save()
+
+        instance.refresh_from_db()
+        return instance
+
+
+class CreateReviewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Review
+        fields = ['id', 'rating', 'comment', 'created_date']
+
+    def validate(self, attrs):
+        appointment = self.context.get('appointment')
+
+        if appointment.status != AppointmentStatus.COMPLETED:
+            raise serializers.ValidationError("Bạn chỉ có thể đánh giá khi buổi hẹn đã hoàn thành.")
+
+        if hasattr(appointment, 'review'):
+            raise serializers.ValidationError("Bạn đã đánh giá buổi hẹn này rồi")
+
+        return attrs
+
+    @transaction.atomic
+    def create(self, validated_data):
+        appointment = self.context['appointment']
+
+        review = Review.objects.create(
+            appointment=appointment,
+            doctor=appointment.doctor,
+            patient=appointment.patient,
+            **validated_data
+        )
+        return review

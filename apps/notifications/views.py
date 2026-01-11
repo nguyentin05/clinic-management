@@ -1,8 +1,10 @@
 from rest_framework import viewsets, status, generics
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.notifications.models import Notification
+from apps.notifications.perms import IsOwnerNotification
 from apps.notifications.serializers import NotificationSerializer
 
 from apps.notifications.services import NotificationService
@@ -11,6 +13,7 @@ from apps.notifications.services import NotificationService
 # chưa phân quyền
 class NotificationView(viewsets.ViewSet, generics.ListAPIView):
     serializer_class = NotificationSerializer
+    permission_classes = [IsAuthenticated, IsOwnerNotification]
 
     def get_queryset(self):
         query = Notification.objects.filter(recipient=self.request.user).select_related('recipient')
@@ -20,10 +23,10 @@ class NotificationView(viewsets.ViewSet, generics.ListAPIView):
             query = query.filter(is_read=is_read)
 
         notification_type = self.request.query_params.get('type')
-        if is_read:
+        if notification_type:
             query = query.filter(NotificationType=notification_type)
 
-        return query
+        return query.order_by('-created_date')
 
     @action(methods=['patch'], detail=True, url_path='mark-as-read')
     def mark_as_read(self, request):

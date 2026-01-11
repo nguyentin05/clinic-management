@@ -1,7 +1,7 @@
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 
-from apps.clinic.models import Appointment
+from apps.clinic.models import Appointment, AppointmentStatus
 from apps.notifications.services import AppointmentNotifications
 
 
@@ -10,24 +10,15 @@ def create_appointment(sender, instance, created, **kwargs):
     if created:
         AppointmentNotifications.notify_created(instance)
 
-    if hasattr(instance, '_old_status'):
-        old_status = instance._old_status
+    if instance.tracker.has_changed('status'):
         new_status = instance.status
+        old_status = instance.tracker.previous('status')
 
-        if new_status == 'CANCELLED':
+        if new_status == AppointmentStatus.CANCELLED:
             AppointmentNotifications.notify_cancelled(instance)
-        elif new_status == 'COMPLETED':
+        elif new_status == AppointmentStatus.COMPLETED:
             AppointmentNotifications.notify_completed(instance)
-        elif old_status == 'PENDING' and new_status == 'CONFIRMED':
+        elif old_status == AppointmentStatus.PENDING and new_status == AppointmentStatus.CONFIRMED:
             AppointmentNotifications.notify_confirmed(instance)
-        elif old_status == 'CONFIRMED' and new_status == 'IN_PROCESS':
+        elif old_status == AppointmentStatus.CONFIRMED and new_status == AppointmentStatus.IN_PROCESS:
             AppointmentNotifications.notify_started(instance)
-
-
-@receiver(pre_save, sender=Appointment)
-def check_status_appointment(sender, instance, **kwargs):
-    if instance.pk:
-        old_instance = Appointment.objects.get(pk=instance.pk)
-        #nếu có đổi trạng thái thì lưu tạm oldstatus để ss
-        if old_instance.status != instance.status:
-            instance._old_status = old_instance.status
