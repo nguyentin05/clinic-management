@@ -1,8 +1,5 @@
-from typing import List
-
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
-from django.utils import timezone
 from firebase_admin import messaging
 
 from apps.clinic.models import AppointmentType
@@ -347,6 +344,7 @@ class TestOrderNotifications:
             }
         )
 
+
 class PrescriptionNotifications:
     @staticmethod
     def notify_created(prescription):
@@ -366,7 +364,7 @@ class PrescriptionNotifications:
         )
 
     @staticmethod
-    def notify_conmpleted(prescription):
+    def notify_completed(prescription):
         appointment = prescription.appointment
 
         NotificationService.create_notification(
@@ -382,20 +380,66 @@ class PrescriptionNotifications:
             }
         )
 
+
 class PaymentNotifications:
     @staticmethod
     def notify_created(payment):
+        amount = f"{payment.amount:,.0f}".replace(',', '.')
+        message = ''
+        screen = 'AppointmentDetail'
+
+        if payment.appointment:
+            message = (f"Bạn có hóa đơn thanh toán lịch khám với bác sĩ {payment.appointment.doctor.get_full_name()}\n"
+                       f"với số tiền {amount} VNĐ.\n"
+                       f"Mã thanh toán: {payment.id}")
+        elif payment.get_prescription:
+            message = (f"Bạn có hóa đơn thanh toán đơn thuốc\n"
+                       f"với số tiền {amount} VNĐ.\n"
+                       f"Mã thanh toán: {payment.id}")
+            screen = 'Prescription'  # sửa lại cho đúng screen
 
         NotificationService.create_notification(
-            recipient=appointment.patient,
-            notification_type=NotificationType.PRESCRIPTION_CREATED,
-            title="Đơn thuốc đã được kê",
-            message=f"Bác sĩ {appointment.doctor.get_full_name()} đã kê đơn thuốc cho bạn. "
-                    f"Vui lòng xem chi tiết và thực hiện theo hướng dẫn.",
+            recipient=payment.patient,
+            notification_type=NotificationType.PAYMENT_CREATED,
+            title="Hóa đơn thanh toán mới",
+            message=message,
             data={
-                'appointment_id': appointment.id,
-                'prescription_id': prescription.id,
-                'screen': 'Prescription',
+                'payment_id': payment.id,
+                'amount': str(payment.amount),
+                'appointment_id': payment.appointment_id if payment.appointment else None,
+                'prescription_id': payment.prescription_id if payment.prescription else None,
+                'screen': screen,
+            }
+        )
+
+    @staticmethod
+    def notify_completed(payment):
+        amount = f"{payment.amount:,.0f}".replace(',', '.')
+        message = ''
+
+        if payment.appointment:
+            message = (f"Bạn đã thanh toán thành công {amount} VNĐ\n"
+                       f"cho lịch khám với bác sĩ {payment.appointment.doctor.get_full_name()}\n"
+                       f"bằng phương thức {payment.get_method_display()}.\n"
+                       f"Mã giao dịch: {payment.id}")
+        elif payment.prescription:
+            message = (f"Bạn đã thanh toán thành công {amount} VNĐ\n"
+                       f"cho đơn thuốc\n"
+                       f"bằng phương thức {payment.get_method_display()}.\n"
+                       f"Mã giao dịch: {payment.id}")
+
+        NotificationService.create_notification(
+            recipient=payment.patient,
+            notification_type=NotificationType.PAYMENT_COMPLETED,
+            title="Thanh toán thành công",
+            message=message,
+            data={
+                'payment_id': payment.id,
+                'amount': str(payment.amount),
+                'method': payment.method,
+                'appointment_id': payment.appointment_id if payment.appointment else None,
+                'prescription_id': payment.prescription_id if payment.get_prescription else None,
+                'screen': 'PaymentDetail',
             }
         )
 

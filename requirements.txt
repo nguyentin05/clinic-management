@@ -31,6 +31,7 @@ django-debug-toolbar==6.1.0
 django-environ==0.12.0
 django-filter==25.2
 django-js-asset==3.1.2
+django-model-utils==5.0.0
 django-oauth-toolkit==3.1.0
 django-redis==6.0.0
 django-stubs==5.2.8
@@ -90,6 +91,7 @@ rsa==4.9.1
 service-identity==24.2.0
 six==1.17.0
 sqlparse==0.5.4
+stripe==14.1.0
 Twisted==25.5.0
 txaio==25.12.2
 types-PyYAML==6.0.12.20250915

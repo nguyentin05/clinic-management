@@ -21,6 +21,8 @@ from drf_yasg import openapi
 from rest_framework import permissions
 from rest_framework.routers import DefaultRouter
 
+from clinic_management.admin import admin_site
+
 schema_view = get_schema_view(
     openapi.Info(
         title="Clinic API",
@@ -36,7 +38,7 @@ schema_view = get_schema_view(
 router = DefaultRouter()
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    path('admin/', admin_site.urls),
     path('o/', include('oauth2_provider.urls', namespace='oauth2_provider')),
     path('', include('apps.users.urls')),
     path('', include('apps.medical.urls')),

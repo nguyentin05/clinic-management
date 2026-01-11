@@ -1,8 +1,10 @@
 from datetime import timedelta
 
 from cloudinary.models import CloudinaryField
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
 from ckeditor.fields import RichTextField
+from model_utils import FieldTracker
 
 
 class DayOfWeek(models.IntegerChoices):
@@ -139,6 +141,8 @@ class Appointment(BaseModel):
 
     completed_date = models.DateTimeField(null=True, blank=True)
 
+    tracker = FieldTracker()
+
     def __str__(self):
         return f"Hẹn: {self.doctor.get_full_name()}: {self.date} ({self.start_time} - {self.end_time})"
 
@@ -148,3 +152,15 @@ class Appointment(BaseModel):
             models.Index(fields=['patient', 'date']),
             models.Index(fields=['date', 'start_time']),
         ]
+
+
+class Review(BaseModel):
+    appointment = models.OneToOneField(Appointment, on_delete=models.CASCADE, related_name='review')
+    doctor = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='doctor_reviews')
+    patient = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='patient_reviews')
+
+    rating = models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
+    comment = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"Review {self.rating}* for {self.doctor.last_name}"

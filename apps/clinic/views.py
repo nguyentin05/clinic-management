@@ -1,25 +1,27 @@
 from datetime import timedelta
 
-from django.db.models import Q
+from django.db.models import Q, Avg, Count
 from django.utils import timezone
 from drf_yasg.utils import swagger_auto_schema, no_body
 from rest_framework import viewsets, generics, status
 from rest_framework.decorators import action
 from rest_framework.generics import get_object_or_404
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from apps.clinic import paginators
-from apps.clinic.models import Specialty, Service, WorkSchedule, Appointment, AppointmentType, AppointmentStatus, Room
-from apps.clinic.perms import IsOwnerAppointment, IsPatient
+from apps.clinic.models import Specialty, Service, WorkSchedule, Appointment, AppointmentType, AppointmentStatus, Room, \
+    Review
+from apps.clinic.perms import IsOwnerAppointment, IsOwnerSchedule
 from apps.clinic.serializers import SpecialtySerializer, ServiceSerializer, WorkScheduleSerializer, \
     RegisterScheduleSerializer, CreateAppointmentSerializer, AppointmentDetailSerializer, AppointmentSerializer, \
     ConfirmAppointmentSerializer, RoomSerializer, StartAppointmentSerializer, CancelAppointmentSerializer, \
-    AppointmentStateSerializer
+    AppointmentStateSerializer, CompleteAppointmentSerializer, CreateReviewSerializer
 from apps.medical.models import MedicalRecord, TestOrder
 from apps.medical.serializers import MedicalRecordSerializer, TestOrderSerializer, TestOrderDetailSerializer
 from apps.pharmacy.models import Prescription
 from apps.pharmacy.serializers import PrescriptionSerializer
+from apps.users.perms import IsEmployee, IsDoctorOrPatient, IsPatient, IsDoctor
 
 
 def get_monday_of_week(date):
@@ -29,6 +31,7 @@ def get_monday_of_week(date):
 class SpecialtyView(viewsets.ViewSet, generics.ListAPIView):
     queryset = Specialty.objects.filter(active=True)
     serializer_class = SpecialtySerializer
+    permission_classes = [AllowAny]
 
     @action(methods=['get'], detail=True, url_path='services')
     def get_services(self, request, pk):
@@ -48,6 +51,7 @@ class ServiceView(viewsets.ViewSet, generics.ListAPIView, generics.RetrieveAPIVi
     queryset = Service.objects.filter(active=True)
     serializer_class = ServiceSerializer
     pagination_class = paginators.ServicePaginator
+    permission_classes = [AllowAny]
 
     def get_queryset(self):
         query = self.queryset
@@ -60,7 +64,7 @@ class ServiceView(viewsets.ViewSet, generics.ListAPIView, generics.RetrieveAPIVi
 
 
 class WorkScheduleView(viewsets.GenericViewSet):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsOwnerSchedule, IsEmployee]
 
     def get_serializer_class(self):
         if self.action == 'register_schedule':
@@ -78,7 +82,7 @@ class WorkScheduleView(viewsets.GenericViewSet):
         today = timezone.now().date()
         current_monday = get_monday_of_week(today)
 
-        schedules = self.get_queryset().filter(from_date=current_monday)
+        schedules = self.get_queryset().filter(week_start=current_monday)
 
         data = self.get_serializer(schedules, many=True).data
 
@@ -94,7 +98,7 @@ class WorkScheduleView(viewsets.GenericViewSet):
         today = timezone.now().date()
         next_monday = get_monday_of_week(today) + timedelta(days=7)
 
-        schedules = self.get_queryset().filter(from_date=next_monday)
+        schedules = self.get_queryset().filter(week_start=next_monday)
 
         data = self.get_serializer(schedules, many=True).data
 
@@ -114,7 +118,7 @@ class WorkScheduleView(viewsets.GenericViewSet):
         user = request.user
         serializer = self.get_serializer(user, data=request.data)
         serializer.is_valid(raise_exception=True)
-        schedules = serializer.save()  # list/queryset
+        schedules = serializer.save()
 
         week_start = serializer.validated_data['week_start']
 
@@ -128,14 +132,21 @@ class WorkScheduleView(viewsets.GenericViewSet):
         }, status=status.HTTP_200_OK)
 
 
-# CHƯA PHÂN QUYỀN
 class AppointmentView(viewsets.ViewSet, generics.ListAPIView, generics.CreateAPIView, generics.RetrieveAPIView):
     queryset = Appointment.objects.filter(active=True)
     pagination_class = paginators.AppointmentPaginator
 
     def get_permissions(self):
+        if self.action in ["list", "retrieve", 'cancel_appointment']:
+            return [IsOwnerAppointment(), IsDoctorOrPatient()]
         if self.action == "create":
             return [IsPatient()]
+        if self.action in ['get_available_rooms', 'complete_appointment', 'confirm_appointment', 'start_appointment']:
+            return [IsOwnerAppointment(), IsDoctor()]
+        if self.action in ['get_prescription', "get_test_orders", 'get_medical_record']:
+            if self.request.method == 'GET':
+                return [IsOwnerAppointment(), IsDoctorOrPatient()]
+            return [IsOwnerAppointment(), IsDoctor()]
         return [IsOwnerAppointment()]
 
     def get_serializer_class(self):
@@ -155,11 +166,17 @@ class AppointmentView(viewsets.ViewSet, generics.ListAPIView, generics.CreateAPI
             return RoomSerializer
         if self.action == "cancel_appointment":
             return CancelAppointmentSerializer
+        if self.action == 'complete_appointment':
+            return CompleteAppointmentSerializer
+        if self.action == 'get_prescription':
+            return PrescriptionSerializer
+        if self.action == 'review':
+            return CreateReviewSerializer
         return AppointmentDetailSerializer
 
     def get_queryset(self):
-        query = self.queryset.select_related('doctor', 'patient', 'work_schedule', 'room')\
-                    .prefetch_related('services', 'services__specialty')
+        query = self.queryset.select_related('doctor', 'patient', 'work_schedule', 'room') \
+            .prefetch_related('services', 'services__specialty')
 
         user = self.request.user
 
@@ -201,7 +218,7 @@ class AppointmentView(viewsets.ViewSet, generics.ListAPIView, generics.CreateAPI
 
         return Response(AppointmentStateSerializer(appointment).data, status=status.HTTP_200_OK)
 
-    # tìm các phòng còn trống
+    # tìm các phòng còn trống cho lịch hẹn
     @action(methods=['get'], detail=True, url_path='available-rooms')
     def get_available_rooms(self, request, pk):
         appointment = self.get_object()
@@ -239,14 +256,11 @@ class AppointmentView(viewsets.ViewSet, generics.ListAPIView, generics.CreateAPI
     def get_medical_record(self, request, pk):
         appointment = self.get_object()
 
-        if appointment.status not in [AppointmentStatus.IN_PROCESS, AppointmentStatus.COMPLETED]:
-            return Response({"message": 'Cuộc hẹn chưa được bắt đầu.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # tìm hs bệnh án nếu ko thấy trả về 404 luôn
         medical_record = get_object_or_404(MedicalRecord, appointment=appointment)
 
-        if request.method == 'patch':
-            serializer = self.get_serializer(medical_record, data=request.data, partial=True)
+        if request.method == 'PATCH':
+            serializer = self.get_serializer(medical_record, data=request.data, partial=True,
+                                             context={'appointment': appointment})
             serializer.is_valid(raise_exception=True)
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -269,7 +283,7 @@ class AppointmentView(viewsets.ViewSet, generics.ListAPIView, generics.CreateAPI
 
         medical_record = get_object_or_404(MedicalRecord, appointment=appointment)
 
-        if request.method == 'post':
+        if request.method == 'POST':
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             test = serializer.save(medical_record=medical_record)
@@ -295,6 +309,21 @@ class AppointmentView(viewsets.ViewSet, generics.ListAPIView, generics.CreateAPI
 
         return Response(AppointmentStateSerializer(appointment).data, status=status.HTTP_200_OK)
 
+    @swagger_auto_schema(methods=['patch'],
+                         operation_description='Kết thúc lịch hẹn',
+                         request_body=no_body,
+                         responses={status.HTTP_200_OK: AppointmentStateSerializer()}
+                         )
+    @action(methods=['patch'], detail=True, url_path='complete')
+    def complete_appointment(self, request, pk):
+        appointment = self.get_object()
+
+        serializer = self.get_serializer(appointment, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(AppointmentStateSerializer(appointment).data, status=status.HTTP_200_OK)
+
     @swagger_auto_schema(
         methods=['get'],
         operation_description='Xem chi tiết đơn thuốc',
@@ -312,16 +341,21 @@ class AppointmentView(viewsets.ViewSet, generics.ListAPIView, generics.CreateAPI
         request_body=PrescriptionSerializer,
         responses={status.HTTP_200_OK: PrescriptionSerializer()}
     )
-    @action(methods=['get', 'post', 'patch'], detail=True, url_path='prescription')
-    def prescription(self, request, pk=None):
+    @swagger_auto_schema(
+        methods=['delete'],
+        operation_description='Xóa đơn thuốc',
+        responses={status.HTTP_204_NO_CONTENT: 'Đã xóa thành công'}
+    )
+    @action(methods=['get', 'post', 'patch', 'delete'], detail=True, url_path='prescription')
+    def get_prescription(self, request, pk):
         appointment = self.get_object()
 
-        if request.method == 'post':
+        if request.method == 'POST':
             if hasattr(appointment, 'prescription'):
                 return Response({"detail": "Đơn thuốc đã tồn tại."},
                                 status=status.HTTP_400_BAD_REQUEST)
 
-            serializer = PrescriptionSerializer(data=request.data, context={'appointment': appointment})
+            serializer = self.get_serializer(data=request.data, context={'appointment': appointment})
             serializer.is_valid(raise_exception=True)
             serializer.save()
 
@@ -329,12 +363,40 @@ class AppointmentView(viewsets.ViewSet, generics.ListAPIView, generics.CreateAPI
 
         prescription = get_object_or_404(Prescription, appointment=appointment)
 
-        if request.method == 'patch':
-            serializer = PrescriptionSerializer(prescription, data=request.data, partial=True,
-                                                context={'appointment': appointment})
+        if request.method == 'PATCH':
+            serializer = self.get_serializer(prescription, data=request.data, partial=True,
+                                             context={'appointment': appointment})
             serializer.is_valid(raise_exception=True)
             serializer.save()
 
             return Response(serializer.data, status=status.HTTP_200_OK)
 
-        return Response(PrescriptionSerializer(prescription).data, status=status.HTTP_200_OK)
+        if request.method == 'DELETE':
+            prescription.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        return Response(self.get_serializer(prescription).data, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(
+        methods=['post'],
+        operation_description='Đánh giá',
+        responses={status.HTTP_201_CREATED: "Đánh giá thành công!"}
+    )
+    @action(methods=['post'], detail=True, url_path='review')
+    def review(self, request, pk):
+        appointment = get_object_or_404(Appointment, id=pk, active=True, patient=request.user)
+
+        serializer = self.get_serializer(data=request.data, context={'appointment': appointment})
+        serializer.is_valid(raise_exception=True)
+        review = serializer.save()
+
+        # cập nhật rating
+        doctor = review.doctor
+
+        stats = Review.objects.filter(doctor=doctor).aggregate(rating=Avg('rating'), total_reviews=Count('id'))
+
+        doctor.doctor_profile.rating = round(stats['rating'], 1)
+        doctor.doctor_profile.total_reviews = stats['total_reviews']
+        doctor.doctor_profile.save()
+
+        return Response({"message": "Đánh giá thành công!"}, status=status.HTTP_201_CREATED)

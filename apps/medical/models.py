@@ -1,5 +1,6 @@
 from ckeditor.fields import RichTextField
 from django.db import models
+from model_utils import FieldTracker
 
 
 class TestStatus(models.TextChoices):
@@ -33,7 +34,7 @@ class MedicalRecord(models.Model):
 class TestOrder(BaseModel):
     medical_record = models.ForeignKey(MedicalRecord, on_delete=models.CASCADE, related_name='test_orders')
 
-    service = models.ForeignKey('clinic.Service', on_delete=models.PROTECT, related_name='test_orders')
+    service = models.ForeignKey('clinic.Service', on_delete=models.PROTECT, related_name='test_orders_service')
 
     nurse = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, blank=True,
                               related_name='confirmed_tests')
@@ -54,6 +55,8 @@ class TestOrder(BaseModel):
                                    related_name='deleted_tests')
 
     completed_date = models.DateTimeField(null=True, blank=True)
+
+    tracker = FieldTracker()
 
     def __str__(self):
         return f"{self.service.name} - {self.medical_record.appointment.patient.get_full_name()}"

@@ -1,0 +1,235 @@
+{% extends 'admin/base_site.html' %}
+{% load static %}
+
+{% block extrahead %}
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex align-items-center mb-4">
+        <h2 class="mb-0 text-black"><i class="fas fa-chart-pie me-2"></i>Báo Cáo Thống Kê Bệnh Nhân</h2>
+    </div>
+
+    <div class="row mb-4">
+        <div class="card border-primary border-2 shadow py-2">
+            <div class="card-body">
+                <div class="row d-flex align-items-center">
+                    <div class="col">
+                        <div class="fw-bold text-primary mb-1">
+                            TỔNG SỐ BỆNH NHÂN
+                        </div>
+                        <div class="h2 mb-0 fw-bold text-black">{{ total_patients }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-users fa-2x text-black"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-6 mb-4 g-3">
+            <div class="card shadow mb-4 h-100">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 h4 fw-bold text-primary">Phân bố theo Độ tuổi</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div>
+                                <canvas id="ageChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <table class="table table-bordered table-striped table-hover mt-2">
+                                <thead class="table-primary">
+                                <tr>
+                                    <th width="50%" class="fs-6">Nhóm tuổi</th>
+                                    <th width="50%" class="text-end fs-6">SL</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                {% for item in age_stats %}
+                                <tr>
+                                    <td class="fs-6">{{ item.age_group }}</td>
+                                    <td class="text-end fs-6">{{ item.count }}</td>
+                                </tr>
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6 mb-4 g-3">
+            <div class="card shadow mb-4 h-100">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 h4 fw-bold text-primary">Phân bố theo Giới tính</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div>
+                                <canvas id="genderChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <table class="table table-bordered table-striped table-hover mt-2">
+                                <thead class="table-primary">
+                                <tr>
+                                    <th class="fs-6">Giới tính</th>
+                                    <th class="text-end fs-6">SL</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                {% for item in gender_stats %}
+                                <tr>
+                                    <td class="fs-6">{{ item.gender_display }}</td>
+                                    <td class="text-end fs-6">{{ item.count }}</td>
+                                </tr>
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-12 mb-4 p-0">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 fw-bold h4 text-primary">Phân bố theo Chuyên khoa</h6>
+                </div>
+                <div class="card-body">
+                    <div style="height: 300px;">
+                        <canvas id="specialtyChart"></canvas>
+                    </div>
+                    <table class="table table-sm table-bordered table-hover">
+                        <thead class="table-primary">
+                        <tr>
+                            <th class="fs-5">Chuyên khoa</th>
+                            <th class="text-end fs-5">Số lượt khám</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% for item in specialty_stats %}
+                        <tr>
+                            <td class="fs-5">{{ item.specialty_name }}</td>
+                            <td class="text-end fw-bold fs-5">{{ item.count }}</td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    let labels = [], labels2 = [], labels3 = []
+    let data = [], data2 = [], data3 = []
+    let colors = [], colors2 = [], colors3 = []
+    let borderColors = [], borderColors2 = [], borderColors3 = []
+
+    {% for s in age_stats %}
+        data.push({{ s.count }})
+        labels.push('{{ s.age_group }}')
+        r = parseInt(Math.random() * 255)
+        g = parseInt(Math.random() * 255)
+        b = parseInt(Math.random() * 255)
+
+        colors.push(`rgba(${r}, ${g}, ${b}, 0.5)`)
+        borderColors.push(`rgba(${r}, ${g}, ${b}, 1)`)
+    {% endfor %}
+
+    {% for s in gender_stats %}
+        data2.push({{ s.count }})
+        labels2.push('{{ s.gender_display }}')
+        r = parseInt(Math.random() * 255)
+        g = parseInt(Math.random() * 255)
+        b = parseInt(Math.random() * 255)
+
+        colors2.push(`rgba(${r}, ${g}, ${b}, 0.5)`)
+        borderColors2.push(`rgba(${r}, ${g}, ${b}, 1)`)
+    {% endfor %}
+
+    {% for s in specialty_stats %}
+        data3.push({{ s.count }})
+        labels3.push('{{ s.specialty_name }}')
+        r = parseInt(Math.random() * 255)
+        g = parseInt(Math.random() * 255)
+        b = parseInt(Math.random() * 255)
+
+        colors3.push(`rgba(${r}, ${g}, ${b}, 0.5)`)
+        borderColors3.push(`rgba(${r}, ${g}, ${b}, 1)`)
+    {% endfor %}
+
+    options = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'bottom',
+                labels: {
+                    usePointStyle: true,
+                    padding: 20
+                }
+            },
+        }
+    }
+
+    options2 = {
+        maintainAspectRatio: false,
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: { stepSize: 1 },
+                grid: { borderDash: [2, 2], drawBorder: false }
+            },
+            x: {
+                grid: { display: false }
+            }
+        },
+        plugins: {
+            legend: { display: false }
+        }
+    }
+
+    window.onload = function() {
+        const ctx = document.getElementById('ageChart').getContext('2d')
+        const ctx2 = document.getElementById('genderChart').getContext('2d')
+        const ctx3 = document.getElementById('specialtyChart').getContext('2d')
+
+        loadChart(ctx, labels, data, 'doughnut', colors, borderColors, options)
+        loadChart(ctx2, labels2, data2, 'doughnut', colors2, borderColors2, options)
+        loadChart(ctx3, labels3, data3, 'bar', colors3, borderColors3, options2)
+    }
+
+function loadChart(ctx, labels, data, type, colors, borderColors, options) {
+    const myChart = new Chart(ctx, {
+        type: type,
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: colors,
+                borderColor: borderColors,
+                borderWidth: 2,
+                hoverOffset: 10
+            }]
+        },
+        options: options
+    });
+}
+</script>
+{% endblock %}

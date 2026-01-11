@@ -1,12 +1,9 @@
-from rest_framework.permissions import SAFE_METHODS, BasePermission, IsAuthenticatedOrReadOnly, IsAuthenticated
+from rest_framework.permissions import BasePermission
 
-from apps.users.models import UserRole, EmployeeRole
-
-
-class IsOwnerAppointment(IsAuthenticated):
+class IsOwnerAppointment(BasePermission):
     def has_object_permission(self, request, view, appointment):
-        return super().has_permission(request, view) and (request.user == appointment.patient or request.user == appointment.doctor)
+        return appointment.patient == request.user or appointment.doctor == request.user
 
-class IsPatient(IsAuthenticated):
-    def has_permission(self, request, view):
-        return super().has_permission(request, view) and request.user.user_role == UserRole.PATIENT
+class IsOwnerSchedule(BasePermission):
+    def has_object_permission(self, request, view, schedule):
+        return schedule.employee == request.user

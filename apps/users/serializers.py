@@ -3,6 +3,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.core.cache import cache
+from django.db import transaction
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 from google.oauth2 import id_token
@@ -17,7 +18,7 @@ from cloudinary.uploader import upload
 
 # login gg
 class GoogleAuthSerializer(serializers.Serializer):
-    token = serializers.CharField(required=True)
+    token = serializers.CharField(required=True, write_only=True)
 
     access_token = serializers.CharField(read_only=True)
     expires_in = serializers.IntegerField(read_only=True)
@@ -25,6 +26,7 @@ class GoogleAuthSerializer(serializers.Serializer):
     scope = serializers.CharField(read_only=True)
     refresh_token = serializers.CharField(read_only=True)
 
+    @transaction.atomic
     def validate(self, attrs):
         token = attrs.get('token')
 
@@ -118,7 +120,7 @@ class PatientProfilePublicSerializer(serializers.ModelSerializer):
 
 # thong tin trong lich hen
 class BasicInfoSerializer(serializers.ModelSerializer):
-    full_name = serializers.SerializerMethodField(source="get_full_name")
+    full_name = serializers.CharField(source='get_full_name', read_only=True)
 
     class Meta:
         model = User
@@ -127,7 +129,7 @@ class BasicInfoSerializer(serializers.ModelSerializer):
 
 # thong tin trong lich hen
 class DoctorInfoSerializer(BasicInfoSerializer):
-    public_profile = DoctorProfilePublicSerializer()
+    public_profile = DoctorProfilePublicSerializer(source='doctor_profile')
 
     class Meta:
         model = BasicInfoSerializer.Meta.model
@@ -136,7 +138,7 @@ class DoctorInfoSerializer(BasicInfoSerializer):
 
 # thong tin trong lich hen
 class PatientInfoSerializer(BasicInfoSerializer):
-    public_profile = PatientProfilePublicSerializer()
+    public_profile = PatientProfilePublicSerializer(source='patient_profile')
 
     class Meta:
         model = BasicInfoSerializer.Meta.model
@@ -193,6 +195,7 @@ class UserSerializer(serializers.ModelSerializer):
 
         return data
 
+    @transaction.atomic
     def create(self, validated_data):
         user = User(**validated_data)
         user.set_password(user.password)
@@ -248,6 +251,7 @@ class ChangePasswordSerializer(serializers.Serializer):
             raise serializers.ValidationError("Mật khẩu cũ không chính xác.")
         return value
 
+    @transaction.atomic
     def update(self, instance, validated_data):
         instance.set_password(validated_data['new_password'])
         instance.save()
@@ -303,6 +307,7 @@ class ResetPasswordSerializer(serializers.Serializer):
         attrs['email'] = email
         return attrs
 
+    @transaction.atomic
     def save(self, **kwargs):
         user = User.objects.get(email=self.validated_data['email'])
         user.set_password(self.validated_data['new_password'])
@@ -320,6 +325,7 @@ class UpdateFCMSerializer(serializers.Serializer):
             raise serializers.ValidationError("FCM token không hợp lệ")
         return value
 
+    @transaction.atomic
     def update(self, instance, validated_data):
         if instance.fcm_token != validated_data['fcm_token']:
             instance.fcm_token = validated_data['fcm_token']

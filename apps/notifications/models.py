@@ -20,6 +20,7 @@ class NotificationType(models.TextChoices):
     PRESCRIPTION_CREATED = 'PRESCRIPTION_CREATED', 'Đơn thuốc đã được bác sĩ kê'
     PRESCRIPTION_COMPLETED = 'PRESCRIPTION_COMPLETED', 'Đơn thuốc đã hoàn tất'
 
+    PAYMENT_CREATED = 'PAYMENT_CREATED', 'Thanh toán mới được tạo'
     PAYMENT_SUCCESS = 'PAYMENT_SUCCESS', 'Thanh toán thành công'
     PAYMENT_FAILED = 'PAYMENT_FAILED', 'Thanh toán thất bại'
 

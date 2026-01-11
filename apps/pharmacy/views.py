@@ -7,11 +7,13 @@ from apps.pharmacy.models import Medicine, Prescription, ImportReceipt
 from apps.pharmacy.serializers import MedicineSerializer, MedicineDetailSerializer, PrescriptionSerializer, \
     DispenseSerializer, ImportReceiptSerializer, ImportReceiptDetailSerializer, ChangeReceiptSerializer
 from apps.pharmacy import paginators
+from apps.users.perms import IsDoctorOrPharmacist, IsPharmacist
 
 
 class MedicineView(viewsets.ViewSet, generics.ListAPIView, generics.RetrieveAPIView):
     queryset = Medicine.objects.filter(active=True)
     pagination_class = paginators.MedicinePaginator
+    permission_classes = [IsDoctorOrPharmacist]
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -34,6 +36,7 @@ class MedicineView(viewsets.ViewSet, generics.ListAPIView, generics.RetrieveAPIV
 
 class PrescriptionView(viewsets.ViewSet, generics.RetrieveAPIView):
     queryset = Prescription.objects.filter(active=True)
+    permission_classes = [IsPharmacist]
 
     def get_serializer_class(self):
         if self.action == 'dispense':
@@ -56,6 +59,7 @@ class PrescriptionView(viewsets.ViewSet, generics.RetrieveAPIView):
 class ImportReceiptView(viewsets.ViewSet, generics.RetrieveUpdateAPIView, generics.ListCreateAPIView):
     queryset = ImportReceipt.objects.filter(active=True).order_by('-created_date')
     serializer_class = ImportReceiptSerializer
+    permission_classes = [IsPharmacist]
 
     def get_queryset(self):
         query = self.queryset
