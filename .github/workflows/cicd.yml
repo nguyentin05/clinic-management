@@ -60,6 +60,17 @@ jobs:
         API_KEY: '123456789'
         API_SECRET: 'dummy_secret'
         GOOGLE_CLIENT_ID: 'dummy_client_id'
+        MOMO_PARTNER_CODE: 'dummny_code'
+        MOMO_ACCESS_KEY: 'dummny_access_key'
+        MOMO_SECRET_KEY: 'dummny_secret_key'
+        MOMO_ENDPOINT: 'dummny_endpoint'
+        MOMO_IPN_URL: 'ipn_dummy'
+        STRIPE_PUBLISHABLE_KEY: 'publishable_dummy'
+        STRIPE_SECRET_KEY: 'secret_key_dummy'
+        STRIPE_WEBHOOK_SECRET: 'webhook_dummy'
+        VNPAY_TMN_CODE: 'dummy_tmn'
+        VNPAY_HASH_SECRET_KEY: 'hash_dummy'
+        VNPAY_PAYMENT_URL: 'pay_url_dummy'
       run: |
         python manage.py test
 
