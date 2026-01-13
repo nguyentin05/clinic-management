@@ -35,7 +35,7 @@ class UserView(viewsets.ViewSet, generics.CreateAPIView):
     def get_current_user(self, request):
         user = request.user
 
-        if request.method == 'patch':
+        if request.method == 'PATCH':
             serializer = self.get_serializer(user, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
             serializer.save()
