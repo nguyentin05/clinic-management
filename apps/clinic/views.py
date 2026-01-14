@@ -187,7 +187,7 @@ class AppointmentView(viewsets.ViewSet, generics.ListAPIView, generics.CreateAPI
         if s:
             query = query.filter(status=s)
 
-        from_date = self.request.query_params.get('week_start')
+        from_date = self.request.query_params.get('from_date')
         if from_date:
             query = query.filter(date__gte=from_date)
 
