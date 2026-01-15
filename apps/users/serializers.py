@@ -104,9 +104,11 @@ class GoogleAuthSerializer(serializers.Serializer):
 
 # thong tin trong lich hen
 class DoctorProfilePublicSerializer(serializers.ModelSerializer):
+    specialty_name = serializers.CharField(source='specialty.name', read_only=True)
+
     class Meta:
         model = DoctorProfile
-        fields = ['specialty', 'bio', 'consultation_fee',
+        fields = ['specialty', 'specialty_name', 'bio', 'consultation_fee',
                   'rating', 'total_reviews', 'total_patients', 'is_available']
 
 

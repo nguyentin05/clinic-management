@@ -8,10 +8,10 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import User, PatientProfile
+from .models import User, PatientProfile, UserRole, EmployeeRole
 from .serializers import UserSerializer, GoogleAuthSerializer, UserDetailSerializer, UserUpdateSerializer, \
     PatientProfileSerializer, ChangePasswordSerializer, ResetPasswordRequestSerializer, VerifyOTPSerializer, \
-    ResetPasswordSerializer, UpdateFCMSerializer
+    ResetPasswordSerializer, UpdateFCMSerializer, DoctorInfoSerializer
 
 
 class UserView(viewsets.ViewSet, generics.CreateAPIView):
@@ -191,3 +191,13 @@ class ResetPasswordView(APIView):
         cache.delete(f"reset_token:{token}")
 
         return Response({"message": "Đặt lại mật khẩu thành công."}, status=status.HTTP_200_OK)
+
+
+class DoctorBookingView(viewsets.ViewSet, generics.ListAPIView):
+    serializer_class = DoctorInfoSerializer
+
+    queryset = User.objects.select_related('doctor_profile', 'doctor_profile__specialty').filter(
+        user_role=UserRole.EMPLOYEE,
+        employee_role=EmployeeRole.DOCTOR,
+        is_active=True
+    ).order_by('-doctor_profile__rating')
