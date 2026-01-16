@@ -2,6 +2,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core.mail import send_mail
 from django.utils.crypto import get_random_string
+from drf_yasg.utils import swagger_auto_schema
 from rest_framework import viewsets, generics, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -12,6 +13,7 @@ from .models import User, PatientProfile, UserRole, EmployeeRole
 from .serializers import UserSerializer, GoogleAuthSerializer, UserDetailSerializer, UserUpdateSerializer, \
     PatientProfileSerializer, ChangePasswordSerializer, ResetPasswordRequestSerializer, VerifyOTPSerializer, \
     ResetPasswordSerializer, UpdateFCMSerializer, DoctorInfoSerializer
+from .ultis import message_response, google_login_response, verify_otp_response
 
 
 class UserView(viewsets.ViewSet, generics.CreateAPIView):
@@ -31,6 +33,24 @@ class UserView(viewsets.ViewSet, generics.CreateAPIView):
             return UserUpdateSerializer
         return UserSerializer
 
+    @swagger_auto_schema(
+        operation_description="Đăng ký tài khoản người dùng mới (Bệnh nhân)",
+        responses={201: UserSerializer()}
+    )
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        methods=['get'],
+        operation_description="Lấy thông tin cơ bản của user đang đăng nhập",
+        responses={200: UserSerializer()}
+    )
+    @swagger_auto_schema(
+        methods=['patch'],
+        operation_description="Cập nhật thông tin cơ bản (Họ tên, SĐT, Avatar...)",
+        request_body=UserUpdateSerializer,
+        responses={200: UserSerializer()}
+    )
     @action(methods=['get', 'patch'], url_path='current-user', detail=False)
     def get_current_user(self, request):
         user = request.user
@@ -42,12 +62,21 @@ class UserView(viewsets.ViewSet, generics.CreateAPIView):
 
         return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
 
+    @swagger_auto_schema(
+        operation_description="Lấy hồ sơ đầy đủ của User (Bao gồm cả thông tin Bệnh nhân/Bác sĩ/Nhân viên)",
+        responses={200: UserDetailSerializer()}
+    )
     @action(methods=['get'], url_path='current-user/profile', detail=False)
     def get_current_user_profile(self, request):
         user = request.user
 
         return Response(UserDetailSerializer(user).data, status=status.HTTP_200_OK)
 
+    @swagger_auto_schema(
+        operation_description="Đổi mật khẩu",
+        request_body=ChangePasswordSerializer,
+        responses={200: message_response}
+    )
     @action(methods=['patch'], url_path='change-password', detail=False)
     def change_password(self, request):
         user = request.user
@@ -58,6 +87,11 @@ class UserView(viewsets.ViewSet, generics.CreateAPIView):
 
         return Response({"message": "Đổi mật khẩu thành công!"}, status=status.HTTP_200_OK)
 
+    @swagger_auto_schema(
+        operation_description="Cập nhật FCM Token (Dùng cho bắn thông báo đẩy)",
+        request_body=UpdateFCMSerializer,
+        responses={200: message_response}
+    )
     @action(methods=['patch'], url_path='fcm-update', detail=False)
     def fcm_update(self, request):
         user = request.user
@@ -73,10 +107,38 @@ class PatientProfileView(viewsets.ViewSet, generics.RetrieveUpdateAPIView):
     queryset = PatientProfile.objects.all()
     serializer_class = PatientProfileSerializer
 
+    @swagger_auto_schema(
+        operation_description="Xem chi tiết hồ sơ bệnh nhân (Tiền sử bệnh, dị ứng...)",
+        responses={200: PatientProfileSerializer()}
+    )
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_description="Cập nhật hồ sơ bệnh nhân",
+        request_body=PatientProfileSerializer,
+        responses={200: PatientProfileSerializer()}
+    )
+    def update(self, request, *args, **kwargs):
+        return super().update(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_description="Cập nhật một phần hồ sơ bệnh nhân",
+        request_body=PatientProfileSerializer,
+        responses={200: PatientProfileSerializer()}
+    )
+    def partial_update(self, request, *args, **kwargs):
+        return super().partial_update(request, *args, **kwargs)
+
 
 class GoogleLoginView(APIView):
     permission_classes = [AllowAny]
 
+    @swagger_auto_schema(
+        operation_description="Đăng nhập bằng Google Access Token",
+        request_body=GoogleAuthSerializer,
+        responses={200: google_login_response}
+    )
     def post(self, request):
         serializer = GoogleAuthSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -87,6 +149,11 @@ class GoogleLoginView(APIView):
 class ResetPasswordRequestView(APIView):
     permission_classes = [AllowAny]
 
+    @swagger_auto_schema(
+        operation_description="Bước 1: Yêu cầu đặt lại mật khẩu (Gửi email chứa OTP)",
+        request_body=ResetPasswordRequestSerializer,
+        responses={200: message_response}
+    )
     def post(self, request):
         serializer = ResetPasswordRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -154,6 +221,11 @@ class ResetPasswordRequestView(APIView):
 class VerifyOTPView(APIView):
     permission_classes = [AllowAny]
 
+    @swagger_auto_schema(
+        operation_description="Bước 2: Xác thực mã OTP đã nhận trong email. Trả về temp_token để dùng cho bước 3.",
+        request_body=VerifyOTPSerializer,
+        responses={200: verify_otp_response}
+    )
     def post(self, request):
         serializer = VerifyOTPSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -182,6 +254,11 @@ class VerifyOTPView(APIView):
 class ResetPasswordView(APIView):
     permission_classes = [AllowAny]
 
+    @swagger_auto_schema(
+        operation_description="Bước 3: Đặt lại mật khẩu mới (Cần temp_token từ Bước 2)",
+        request_body=ResetPasswordSerializer,
+        responses={200: message_response}
+    )
     def post(self, request):
         serializer = ResetPasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -201,3 +278,10 @@ class DoctorBookingView(viewsets.ViewSet, generics.ListAPIView):
         employee_role=EmployeeRole.DOCTOR,
         is_active=True
     ).order_by('-doctor_profile__rating')
+
+    @swagger_auto_schema(
+        operation_description="Lấy danh sách bác sĩ (Sắp xếp theo đánh giá từ cao xuống thấp)",
+        responses={200: DoctorInfoSerializer(many=True)}
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)

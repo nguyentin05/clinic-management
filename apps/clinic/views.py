@@ -1,7 +1,7 @@
 from datetime import timedelta
-
 from django.db.models import Q, Avg, Count
 from django.utils import timezone
+from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema, no_body
 from rest_framework import viewsets, generics, status
 from rest_framework.decorators import action
@@ -17,6 +17,8 @@ from apps.clinic.serializers import SpecialtySerializer, ServiceSerializer, Work
     RegisterScheduleSerializer, CreateAppointmentSerializer, AppointmentDetailSerializer, AppointmentSerializer, \
     ConfirmAppointmentSerializer, RoomSerializer, StartAppointmentSerializer, CancelAppointmentSerializer, \
     AppointmentStateSerializer, CompleteAppointmentSerializer, CreateReviewSerializer
+from apps.clinic.utils import get_monday_of_week, param_q, schedule_custom_response, param_to_date, param_week_start, \
+    param_status
 from apps.medical.models import MedicalRecord, TestOrder
 from apps.medical.serializers import MedicalRecordSerializer, TestOrderSerializer, TestOrderDetailSerializer
 from apps.pharmacy.models import Prescription
@@ -24,15 +26,22 @@ from apps.pharmacy.serializers import PrescriptionSerializer
 from apps.users.perms import IsEmployee, IsDoctorOrPatient, IsPatient, IsDoctor
 
 
-def get_monday_of_week(date):
-    return date - timedelta(days=date.weekday())
-
-
 class SpecialtyView(viewsets.ViewSet, generics.ListAPIView):
     queryset = Specialty.objects.filter(active=True)
     serializer_class = SpecialtySerializer
     permission_classes = [AllowAny]
 
+    @swagger_auto_schema(
+        operation_description="Lấy danh sách tất cả chuyên khoa đang hoạt động",
+        responses={200: SpecialtySerializer(many=True)}
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_description='Lấy danh sách dịch vụ thuộc chuyên khoa (Hỗ trợ phân trang)',
+        responses={200: ServiceSerializer(many=True)}
+    )
     @action(methods=['get'], detail=True, url_path='services')
     def get_services(self, request, pk):
         services = self.get_object().services.filter(active=True)
@@ -52,6 +61,20 @@ class ServiceView(viewsets.ViewSet, generics.ListAPIView, generics.RetrieveAPIVi
     serializer_class = ServiceSerializer
     pagination_class = paginators.ServicePaginator
     permission_classes = [AllowAny]
+
+    @swagger_auto_schema(
+        manual_parameters=[param_q],
+        operation_description="Tra cứu danh sách dịch vụ y tế (Có thể tìm kiếm theo tên)"
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_description="Xem chi tiết thông tin một dịch vụ",
+        responses={200: ServiceSerializer()}
+    )
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
 
     def get_queryset(self):
         query = self.queryset
@@ -77,6 +100,10 @@ class WorkScheduleView(viewsets.GenericViewSet):
             active=True
         ).order_by('day_of_week', 'start_time')
 
+    @swagger_auto_schema(
+        operation_description="Xem lịch làm việc của nhân viên trong tuần hiện tại",
+        responses={200: schedule_custom_response}
+    )
     @action(methods=['get'], detail=False, url_path='current-schedule')
     def get_current_schedule(self, request):
         today = timezone.now().date()
@@ -93,6 +120,10 @@ class WorkScheduleView(viewsets.GenericViewSet):
             "schedules": data
         }, status=status.HTTP_200_OK)
 
+    @swagger_auto_schema(
+        operation_description="Xem lịch làm việc của nhân viên trong tuần kế tiếp",
+        responses={200: schedule_custom_response}
+    )
     @action(methods=['get'], detail=False, url_path='next-schedule')
     def get_next_schedule(self, request):
         today = timezone.now().date()
@@ -113,6 +144,11 @@ class WorkScheduleView(viewsets.GenericViewSet):
             "schedules": data
         }, status=status.HTTP_200_OK)
 
+    @swagger_auto_schema(
+        operation_description="Đăng ký hoặc cập nhật lịch làm việc",
+        request_body=RegisterScheduleSerializer,
+        responses={200: schedule_custom_response}
+    )
     @action(methods=['put'], detail=False, url_path='register-schedule')
     def register_schedule(self, request):
         user = request.user
@@ -197,8 +233,24 @@ class AppointmentView(viewsets.ViewSet, generics.ListAPIView, generics.CreateAPI
 
         return query.order_by('-created_date')
 
-    @swagger_auto_schema(operation_description='Tạo lịch hẹn của bệnh nhân',
-                         responses={status.HTTP_201_CREATED: AppointmentDetailSerializer()})
+    @swagger_auto_schema(
+        manual_parameters=[param_status, param_week_start, param_to_date],
+        operation_description="Lấy danh sách lịch hẹn (Hỗ trợ lọc theo ngày và trạng thái)"
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_description='Xem chi tiết thông tin một lịch hẹn',
+        responses={200: AppointmentDetailSerializer()}
+    )
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_description='Bệnh nhân đặt lịch hẹn khám bệnh mới',
+        responses={status.HTTP_201_CREATED: AppointmentDetailSerializer()}
+    )
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
@@ -206,8 +258,11 @@ class AppointmentView(viewsets.ViewSet, generics.ListAPIView, generics.CreateAPI
 
         return Response(AppointmentDetailSerializer(appointment).data, status=status.HTTP_201_CREATED)
 
-    @swagger_auto_schema(operation_description='Xác nhận lịch hẹn',
-                         responses={status.HTTP_200_OK: AppointmentStateSerializer()})
+    @swagger_auto_schema(
+        operation_description='Bác sĩ xác nhận lịch hẹn (Chuyển trạng thái sang CONFIRMED)',
+        request_body=ConfirmAppointmentSerializer,
+        responses={status.HTTP_200_OK: AppointmentStateSerializer()}
+    )
     @action(methods=['patch'], detail=True, url_path='confirm')
     def confirm_appointment(self, request, pk):
         appointment = self.get_object()
@@ -218,7 +273,10 @@ class AppointmentView(viewsets.ViewSet, generics.ListAPIView, generics.CreateAPI
 
         return Response(AppointmentStateSerializer(appointment).data, status=status.HTTP_200_OK)
 
-    # tìm các phòng còn trống cho lịch hẹn
+    @swagger_auto_schema(
+        operation_description='Gợi ý danh sách phòng trống phù hợp cho lịch hẹn',
+        responses={status.HTTP_200_OK: RoomSerializer(many=True)}
+    )
     @action(methods=['get'], detail=True, url_path='available-rooms')
     def get_available_rooms(self, request, pk):
         appointment = self.get_object()
@@ -240,8 +298,11 @@ class AppointmentView(viewsets.ViewSet, generics.ListAPIView, generics.CreateAPI
 
         return Response(self.get_serializer(available_rooms, many=True).data, status=status.HTTP_200_OK)
 
-    @swagger_auto_schema(operation_description='Xác nhận lịch hẹn', request_body=no_body,
-                         responses={status.HTTP_200_OK: AppointmentStateSerializer()})
+    @swagger_auto_schema(
+        operation_description='Bác sĩ bắt đầu cuộc hẹn (Chuyển trạng thái sang IN_PROCESS)',
+        request_body=no_body,
+        responses={status.HTTP_200_OK: AppointmentStateSerializer()}
+    )
     @action(methods=['patch'], detail=True, url_path='start')
     def start_appointment(self, request, pk):
         appointment = self.get_object()
@@ -252,6 +313,17 @@ class AppointmentView(viewsets.ViewSet, generics.ListAPIView, generics.CreateAPI
 
         return Response(AppointmentStateSerializer(appointment).data, status=status.HTTP_200_OK)
 
+    @swagger_auto_schema(
+        methods=['get'],
+        operation_description='Xem hồ sơ bệnh án thuộc lịch hẹn này',
+        responses={200: MedicalRecordSerializer()}
+    )
+    @swagger_auto_schema(
+        methods=['patch'],
+        operation_description='Cập nhật thông tin hồ sơ bệnh án',
+        request_body=MedicalRecordSerializer,
+        responses={200: MedicalRecordSerializer()}
+    )
     @action(methods=['get', 'patch'], detail=True, url_path='medical-record')
     def get_medical_record(self, request, pk):
         appointment = self.get_object()
@@ -267,13 +339,17 @@ class AppointmentView(viewsets.ViewSet, generics.ListAPIView, generics.CreateAPI
 
         return Response(self.get_serializer(medical_record).data, status=status.HTTP_200_OK)
 
-    @swagger_auto_schema(methods=['post'],
-                         operation_description='Bác sĩ tạo xét nghiệm',
-                         request_body=TestOrderSerializer,
-                         responses={status.HTTP_201_CREATED: TestOrderDetailSerializer()})
-    @swagger_auto_schema(methods=['get'],
-                         operation_description='Lấy danh sách xét nghiệm của lịch hẹn\nLưu ý trả về ko có note và service id nhé',
-                         responses={status.HTTP_200_OK: TestOrderSerializer()})
+    @swagger_auto_schema(
+        methods=['post'],
+        operation_description='Bác sĩ chỉ định (tạo) xét nghiệm mới',
+        request_body=TestOrderSerializer,
+        responses={status.HTTP_201_CREATED: TestOrderDetailSerializer()}
+    )
+    @swagger_auto_schema(
+        methods=['get'],
+        operation_description='Lấy danh sách các chỉ định xét nghiệm của lịch hẹn',
+        responses={status.HTTP_200_OK: TestOrderSerializer(many=True)}
+    )
     @action(methods=['get', 'post'], detail=True, url_path='test-orders')
     def get_test_orders(self, request, pk):
         appointment = self.get_object()
@@ -294,11 +370,12 @@ class AppointmentView(viewsets.ViewSet, generics.ListAPIView, generics.CreateAPI
 
         return Response(self.get_serializer(test_orders, many=True).data, status=status.HTTP_200_OK)
 
-    @swagger_auto_schema(methods=['patch'],
-                         operation_description='Hủy lịch hẹn cho bệnh nhân',
-                         request_body=CancelAppointmentSerializer,
-                         responses={status.HTTP_200_OK: AppointmentStateSerializer()}
-                         )
+    @swagger_auto_schema(
+        methods=['patch'],
+        operation_description='Hủy lịch hẹn (Dành cho bệnh nhân/Bác sĩ)',
+        request_body=CancelAppointmentSerializer,
+        responses={status.HTTP_200_OK: AppointmentStateSerializer()}
+    )
     @action(methods=['patch'], detail=True, url_path='cancel')
     def cancel_appointment(self, request, pk):
         appointment = self.get_object()
@@ -309,11 +386,12 @@ class AppointmentView(viewsets.ViewSet, generics.ListAPIView, generics.CreateAPI
 
         return Response(AppointmentStateSerializer(appointment).data, status=status.HTTP_200_OK)
 
-    @swagger_auto_schema(methods=['patch'],
-                         operation_description='Kết thúc lịch hẹn',
-                         request_body=no_body,
-                         responses={status.HTTP_200_OK: AppointmentStateSerializer()}
-                         )
+    @swagger_auto_schema(
+        methods=['patch'],
+        operation_description='Hoàn thành lịch hẹn (Kết thúc khám)',
+        request_body=no_body,
+        responses={status.HTTP_200_OK: AppointmentStateSerializer()}
+    )
     @action(methods=['patch'], detail=True, url_path='complete')
     def complete_appointment(self, request, pk):
         appointment = self.get_object()
@@ -326,25 +404,26 @@ class AppointmentView(viewsets.ViewSet, generics.ListAPIView, generics.CreateAPI
 
     @swagger_auto_schema(
         methods=['get'],
-        operation_description='Xem chi tiết đơn thuốc',
+        operation_description='Xem chi tiết đơn thuốc đã kê',
         responses={status.HTTP_200_OK: PrescriptionSerializer()}
     )
     @swagger_auto_schema(
         methods=['post'],
-        operation_description='Bác sĩ kê đơn thuốc',
+        operation_description='Bác sĩ kê đơn thuốc mới',
         request_body=PrescriptionSerializer,
         responses={status.HTTP_201_CREATED: PrescriptionSerializer()}
     )
     @swagger_auto_schema(
         methods=['patch'],
-        operation_description='Sửa đơn thuốc',
+        operation_description='Chỉnh sửa đơn thuốc hiện có',
         request_body=PrescriptionSerializer,
         responses={status.HTTP_200_OK: PrescriptionSerializer()}
     )
     @swagger_auto_schema(
         methods=['delete'],
         operation_description='Xóa đơn thuốc',
-        responses={status.HTTP_204_NO_CONTENT: 'Đã xóa thành công'}
+        responses={
+            status.HTTP_204_NO_CONTENT: openapi.Schema(type=openapi.TYPE_STRING, description="Đã xóa thành công")}
     )
     @action(methods=['get', 'post', 'patch', 'delete'], detail=True, url_path='prescription')
     def get_prescription(self, request, pk):
@@ -379,8 +458,14 @@ class AppointmentView(viewsets.ViewSet, generics.ListAPIView, generics.CreateAPI
 
     @swagger_auto_schema(
         methods=['post'],
-        operation_description='Đánh giá',
-        responses={status.HTTP_201_CREATED: "Đánh giá thành công!"}
+        operation_description='Bệnh nhân gửi đánh giá cho bác sĩ',
+        request_body=CreateReviewSerializer,
+        responses={
+            status.HTTP_201_CREATED: openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={'message': openapi.Schema(type=openapi.TYPE_STRING, example='Đánh giá thành công!')}
+            )
+        }
     )
     @action(methods=['post'], detail=True, url_path='review')
     def review(self, request, pk):
