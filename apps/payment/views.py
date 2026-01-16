@@ -1,4 +1,5 @@
 from django.utils import timezone
+from drf_yasg.utils import swagger_auto_schema, no_body
 from rest_framework import viewsets, status, generics
 from rest_framework.decorators import action
 from rest_framework.generics import get_object_or_404
@@ -10,8 +11,12 @@ from apps.payment.perms import IsOwnerPayment, IsOwnerOnlinePayment
 from apps.payment.serializers import PaymentSerializer, OnlinePaymentSerializer, PaymentStatusSerializer, \
     PaymentDetailSerializer
 from apps.payment.strategies import PaymentStrategyFactory
+from apps.payment.ultis import param_is_paid, param_payment_method_filter, cash_payment_response, \
+    online_payment_response, param_callback_method
 from apps.users.models import UserRole
-from apps.users.perms import IsNurse, IsPatient
+from apps.users.perms import IsNurse
+
+
 
 
 class PaymentViewSet(viewsets.ViewSet, generics.ListAPIView, generics.RetrieveAPIView):
@@ -52,6 +57,28 @@ class PaymentViewSet(viewsets.ViewSet, generics.ListAPIView, generics.RetrieveAP
             return PaymentSerializer
         return PaymentDetailSerializer
 
+    @swagger_auto_schema(
+        manual_parameters=[param_is_paid, param_payment_method_filter],
+        operation_description="Lấy danh sách lịch sử thanh toán (Có thể lọc theo trạng thái và phương thức)"
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_description="Xem chi tiết một hóa đơn thanh toán",
+        responses={200: PaymentDetailSerializer()}
+    )
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_description='Xác nhận thanh toán bằng tiền mặt (Dành cho Y tá/Thu ngân)',
+        request_body=no_body,
+        responses={
+            status.HTTP_200_OK: cash_payment_response,
+            status.HTTP_400_BAD_REQUEST: "Hóa đơn đã được thanh toán hoặc lỗi xử lý"
+        }
+    )
     @action(methods=['post'], detail=True, url_path='cash')
     def cash_payment(self, request, pk):
         payment = get_object_or_404(Payment, id=pk, active=True)
@@ -73,6 +100,14 @@ class PaymentViewSet(viewsets.ViewSet, generics.ListAPIView, generics.RetrieveAP
         else:
             return Response({"error": result['message']}, status=status.HTTP_400_BAD_REQUEST)
 
+    @swagger_auto_schema(
+        operation_description='Tạo yêu cầu thanh toán Online (Momo, VNPay, Stripe).\nTrả về URL để redirect user sang trang thanh toán.',
+        request_body=OnlinePaymentSerializer,
+        responses={
+            status.HTTP_200_OK: online_payment_response,
+            status.HTTP_400_BAD_REQUEST: "Lỗi tạo giao dịch"
+        }
+    )
     @action(methods=['post'], detail=True, url_path='online')
     def online_payment(self, request, pk):
         serializer = OnlinePaymentSerializer(data=request.data)
@@ -109,8 +144,14 @@ class PaymentViewSet(viewsets.ViewSet, generics.ListAPIView, generics.RetrieveAP
         except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-    # lấy id trong dữ liệu bên thanh toán trả về
-    # api này đc gọi bởi bên thanh toán
+    @swagger_auto_schema(
+        manual_parameters=[param_callback_method],
+        operation_description='Webhook nhận kết quả thanh toán từ bên thứ 3 (Momo/VNPay/Stripe). \nAPI này được gọi tự động bởi cổng thanh toán, Client không gọi trực tiếp.',
+        responses={
+            status.HTTP_200_OK: "Payment success",
+            status.HTTP_400_BAD_REQUEST: "Invalid signature / Payment failed"
+        }
+    )
     @action(methods=['post'], detail=False, url_path='callback/(?P<method>[^/.]+)')
     def callback(self, request, method):
         try:
@@ -165,6 +206,10 @@ class PaymentViewSet(viewsets.ViewSet, generics.ListAPIView, generics.RetrieveAP
         except Exception as e:
             return Response({"error": "Internal server error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @swagger_auto_schema(
+        operation_description='Kiểm tra trạng thái hiện tại của hóa đơn',
+        responses={200: PaymentStatusSerializer()}
+    )
     @action(methods=['get'], detail=True, url_path='check-status')
     def check_status(self, request, pk):
         payment = get_object_or_404(Payment, id=pk, active=True)

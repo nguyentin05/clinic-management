@@ -7,6 +7,7 @@ from apps.pharmacy.models import Medicine, Prescription, ImportReceipt
 from apps.pharmacy.serializers import MedicineSerializer, MedicineDetailSerializer, PrescriptionSerializer, \
     DispenseSerializer, ImportReceiptSerializer, ImportReceiptDetailSerializer, ChangeReceiptSerializer
 from apps.pharmacy import paginators
+from apps.pharmacy.ultis import param_q, param_cate_id, detail_response_schema, param_date, param_import_status
 from apps.users.perms import IsDoctorOrPharmacist, IsPharmacist
 
 
@@ -33,6 +34,20 @@ class MedicineView(viewsets.ViewSet, generics.ListAPIView, generics.RetrieveAPIV
 
         return query
 
+    @swagger_auto_schema(
+        manual_parameters=[param_q, param_cate_id],
+        operation_description="Lấy danh sách thuốc (Hỗ trợ tìm kiếm và lọc theo danh mục)"
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_description="Xem chi tiết thông tin thuốc",
+        responses={200: MedicineDetailSerializer()}
+    )
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+
 
 class PrescriptionView(viewsets.ViewSet, generics.RetrieveAPIView):
     queryset = Prescription.objects.filter(active=True)
@@ -43,8 +58,19 @@ class PrescriptionView(viewsets.ViewSet, generics.RetrieveAPIView):
             return DispenseSerializer
         return PrescriptionSerializer
 
-    @swagger_auto_schema(method='post', operation_description='Hoàn tất đơn thuốc',
-                         request_body=no_body, responses={200: "Đã hoàn tất đơn thuốc."})
+    @swagger_auto_schema(
+        operation_description="Xem chi tiết đơn thuốc cần cấp phát",
+        responses={200: PrescriptionSerializer()}
+    )
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        method='post',
+        operation_description='Dược sĩ xác nhận cấp phát thuốc (Hoàn tất đơn thuốc)',
+        request_body=no_body,
+        responses={200: detail_response_schema}
+    )
     @action(methods=['post'], detail=True, url_path='dispense')
     def dispense(self, request, pk):
         prescription = self.get_object()
@@ -82,10 +108,45 @@ class ImportReceiptView(viewsets.ViewSet, generics.RetrieveUpdateAPIView, generi
         return ImportReceiptDetailSerializer
 
     @swagger_auto_schema(
+        manual_parameters=[param_date, param_import_status],
+        operation_description="Lấy danh sách phiếu nhập kho (Lọc theo ngày và trạng thái)"
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_description="Tạo phiếu nhập kho mới (Draft)",
+        responses={201: ImportReceiptDetailSerializer()}
+    )
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_description="Xem chi tiết phiếu nhập kho",
+        responses={200: ImportReceiptDetailSerializer()}
+    )
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_description="Cập nhật thông tin phiếu nhập (Khi còn ở trạng thái Draft)",
+        responses={200: ImportReceiptDetailSerializer()}
+    )
+    def update(self, request, *args, **kwargs):
+        return super().update(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_description="Cập nhật một phần phiếu nhập",
+        responses={200: ImportReceiptDetailSerializer()}
+    )
+    def partial_update(self, request, *args, **kwargs):
+        return super().partial_update(request, *args, **kwargs)
+
+    @swagger_auto_schema(
         method='patch',
-        operation_description='Nộp phiếu nhập kho',
+        operation_description='Chốt phiếu nhập kho (Commit) - Cộng số lượng vào kho thuốc',
         request_body=no_body,
-        responses={200: "Hoàn tất nộp phiếu nhập kho"}
+        responses={200: detail_response_schema}
     )
     @action(methods=['patch'], detail=True, url_path='commit')
     def commit(self, request, pk=None):
@@ -100,7 +161,7 @@ class ImportReceiptView(viewsets.ViewSet, generics.RetrieveUpdateAPIView, generi
         method='patch',
         operation_description='Hủy phiếu nhập kho',
         request_body=no_body,
-        responses={200: "Hoàn tất hủy phiếu nhập kho"}
+        responses={200: detail_response_schema}
     )
     @action(methods=['patch'], detail=True, url_path='cancel')
     def cancel(self, request, pk=None):

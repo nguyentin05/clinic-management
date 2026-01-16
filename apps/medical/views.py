@@ -8,10 +8,10 @@ from apps.medical.models import TestOrder
 from apps.medical.perms import IsOwnerTestOrder, IsOwnerTestOrderDoctorOrNurse, IsOwnerTestOrderNurse
 from apps.medical.serializers import TestOrderSerializer, ConfirmTestOrderSerializer, TestOrderDetailSerializer, \
     CancelTestOrderSerializer, CompleteTestOrderSerializer, UpdateTestOrderSerializer
+from apps.medical.ultis import param_test_status
 from apps.users.perms import IsNurse
 
 
-# CHƯA PHÂN QUYỀN
 class TestOrderView(viewsets.ViewSet, generics.ListAPIView, generics.RetrieveAPIView):
     queryset = TestOrder.objects.filter(active=True)
 
@@ -52,8 +52,26 @@ class TestOrderView(viewsets.ViewSet, generics.ListAPIView, generics.RetrieveAPI
 
         return TestOrderDetailSerializer
 
-    @swagger_auto_schema(operation_description='Xác nhận xét nghiệm', request_body=no_body,
-                         responses={status.HTTP_200_OK: TestOrderDetailSerializer()})
+    @swagger_auto_schema(
+        manual_parameters=[param_test_status],
+        operation_description="Lấy danh sách các yêu cầu xét nghiệm (Dành cho Y tá)",
+        responses={200: TestOrderSerializer(many=True)}
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_description="Xem chi tiết phiếu chỉ định xét nghiệm",
+        responses={200: TestOrderDetailSerializer()}
+    )
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_description='Y tá xác nhận tiếp nhận phiếu xét nghiệm (Chuyển trạng thái sang IN_PROCESS)',
+        request_body=no_body,
+        responses={status.HTTP_200_OK: TestOrderDetailSerializer()}
+    )
     @action(methods=['patch'], detail=True, url_path='confirm')
     def confirm_test(self, request, pk):
         test = self.get_object()
@@ -64,10 +82,14 @@ class TestOrderView(viewsets.ViewSet, generics.ListAPIView, generics.RetrieveAPI
 
         return Response(TestOrderDetailSerializer(test).data, status=status.HTTP_200_OK)
 
-    @swagger_auto_schema(operation_description='Tùy theo role mà gửi đúng trường nhé, ko là server nó ko nhận đâu:)',
-                         request_body=UpdateTestOrderSerializer(),
-                         responses={status.HTTP_200_OK: TestOrderDetailSerializer()})
-    # cập nhật này dùng cho cả y tá và bác sĩ nhưng phân theo role và trạng thái
+    @swagger_auto_schema(
+        operation_description='Cập nhật thông tin phiếu xét nghiệm.\n\n'
+                              '**Lưu ý:**\n'
+                              '- **Bác sĩ:** Chỉ được cập nhật kết quả (result_file, result_text...)\n'
+                              '- **Y tá:** Chỉ được cập nhật trạng thái hoặc ghi chú thực hiện.',
+        request_body=UpdateTestOrderSerializer(),
+        responses={status.HTTP_200_OK: TestOrderDetailSerializer()}
+    )
     @action(methods=['patch'], detail=True, url_path='update')
     def update_test(self, request, pk):
         test = self.get_object()
@@ -78,8 +100,11 @@ class TestOrderView(viewsets.ViewSet, generics.ListAPIView, generics.RetrieveAPI
 
         return Response(TestOrderDetailSerializer(test).data, status=status.HTTP_200_OK)
 
-    @swagger_auto_schema(operation_description='Xác nhận xét nghiệm', request_body=CancelTestOrderSerializer(),
-                         responses={status.HTTP_200_OK: TestOrderDetailSerializer()})
+    @swagger_auto_schema(
+        operation_description='Hủy yêu cầu xét nghiệm (Dành cho Bác sĩ hoặc Y tá)',
+        request_body=CancelTestOrderSerializer(),
+        responses={status.HTTP_200_OK: TestOrderDetailSerializer()}
+    )
     @action(methods=['patch'], detail=True, url_path='cancel')
     def cancel_test(self, request, pk):
         test = self.get_object()
@@ -90,8 +115,11 @@ class TestOrderView(viewsets.ViewSet, generics.ListAPIView, generics.RetrieveAPI
 
         return Response(TestOrderDetailSerializer(test).data, status=status.HTTP_200_OK)
 
-    @swagger_auto_schema(operation_description='Hoàn tất xét nghiệm', request_body=no_body,
-                         responses={status.HTTP_200_OK: TestOrderDetailSerializer()})
+    @swagger_auto_schema(
+        operation_description='Y tá hoàn tất quá trình xét nghiệm (Chuyển trạng thái sang COMPLETED)',
+        request_body=no_body,
+        responses={status.HTTP_200_OK: TestOrderDetailSerializer()}
+    )
     @action(methods=['patch'], detail=True, url_path='complete')
     def complete_test(self, request, pk):
         test = self.get_object()

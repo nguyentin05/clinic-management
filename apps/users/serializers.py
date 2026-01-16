@@ -318,7 +318,7 @@ class ResetPasswordSerializer(serializers.Serializer):
         return user
 
 
-# cập nhật fcm
+    # cập nhật fcm
 class UpdateFCMSerializer(serializers.Serializer):
     fcm_token = serializers.CharField(max_length=255)
 
