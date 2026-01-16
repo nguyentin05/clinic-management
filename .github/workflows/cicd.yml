@@ -86,6 +86,7 @@ jobs:
         host: ${{ secrets.PA_HOST }}
         username: ${{ secrets.PA_USERNAME }}
         key: ${{ secrets.PA_SSH_PRIVATE_KEY }}
+        debug: true 
         script: |
           set -e
           
