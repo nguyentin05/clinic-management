@@ -53,6 +53,6 @@ clinic-management/
 ├── firebase-credentials.json
 └── manage.py
 ```
-[🔗 Link báo cáo](https://docs.google.com/document/d/1Y04beecq-cN7KsIOiicAEbM45gO1Br9q6KGfvgCJ2mM/edit?usp=sharing)
+[🔗 Link docs API](https://docs.google.com/document/d/1Y04beecq-cN7KsIOiicAEbM45gO1Br9q6KGfvgCJ2mM/edit?usp=sharing)
  
 [🔗 Link web](https://trongtin2005.pythonanywhere.com/)(có thể lúc bạn xem nó đã die do kinh phí ko cho phép:D)
